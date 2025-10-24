@@ -35,9 +35,6 @@
 		"strict": true,
 
 		/* Skip type checking all .d.ts files. */
-		"skipLibCheck": true,
-		"types": [
-			"@cloudflare/workers-types"
-		]
+		"skipLibCheck": true
 	}
 }

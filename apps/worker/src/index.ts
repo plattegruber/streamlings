@@ -1,64 +1,86 @@
 import { DurableObject } from "cloudflare:workers";
 
 /**
- * Welcome to Cloudflare Workers! This is your first Durable Objects application.
- *
- * - Run `npm run dev` in your terminal to start a development server
- * - Open a browser tab at http://localhost:8787/ to see your Durable Object in action
- * - Run `npm run deploy` to publish your application
- *
- * Bind resources to your worker in `wrangler.jsonc`. After adding bindings, a type definition for the
- * `Env` object can be regenerated with `npm run cf-typegen`.
- *
- * Learn more at https://developers.cloudflare.com/durable-objects
+ * StreamlingState tracks event counts from Twitch EventSub webhooks
  */
-
-/** A Durable Object's behavior is defined in an exported Javascript class */
 export class StreamlingState extends DurableObject<Env> {
-	/**
-	 * The constructor is invoked once upon creation of the Durable Object, i.e. the first call to
-	 * 	`DurableObjectStub::get` for a given identifier (no-op constructors can be omitted)
-	 *
-	 * @param ctx - The interface for interacting with Durable Object state
-	 * @param env - The interface to reference bindings declared in wrangler.jsonc
-	 */
+	private eventCounts: Map<string, number>;
+
 	constructor(ctx: DurableObjectState, env: Env) {
 		super(ctx, env);
+		this.eventCounts = new Map();
 	}
 
 	/**
-	 * The Durable Object exposes an RPC method sayHello which will be invoked when when a Durable
-	 *  Object instance receives a request from a Worker via the same method invocation on the stub
-	 *
-	 * @param name - The name provided to a Durable Object instance from a Worker
-	 * @returns The greeting to be sent back to the Worker
+	 * Increment the count for a specific event type
 	 */
-	async sayHello(name: string): Promise<string> {
-		return `Hello, ${name}!`;
+	async incrementEvent(eventType: string): Promise<void> {
+		const current = this.eventCounts.get(eventType) || 0;
+		this.eventCounts.set(eventType, current + 1);
+	}
+
+	/**
+	 * Get all event counts
+	 */
+	async getCounts(): Promise<Record<string, number>> {
+		return Object.fromEntries(this.eventCounts);
 	}
 }
 
 export default {
-	/**
-	 * This is the standard fetch handler for a Cloudflare Worker
-	 *
-	 * @param request - The request submitted to the Worker from the client
-	 * @param env - The interface to reference bindings declared in wrangler.jsonc
-	 * @param ctx - The execution context of the Worker
-	 * @returns The response to be sent back to the client
-	 */
 	async fetch(request, env, ctx): Promise<Response> {
-		// Create a stub to open a communication channel with the Durable Object
-		// instance named "foo".
-		//
-		// Requests from all Workers to the Durable Object instance named "foo"
-		// will go to a single remote Durable Object instance.
-		const stub = env.STREAMLING_STATE.getByName("foo");
+		const url = new URL(request.url);
 
-		// Call the `sayHello()` RPC method on the stub to invoke the method on
-		// the remote Durable Object instance.
-		const greeting = await stub.sayHello("world");
+		// Route to /webhook endpoint
+		if (url.pathname !== '/webhook') {
+			return new Response('Not Found', { status: 404 });
+		}
 
-		return new Response(greeting);
+		// Get the StreamlingState Durable Object instance
+		const stub = env.STREAMLING_STATE.getByName("streamling");
+
+		// GET /webhook - return current counts
+		if (request.method === 'GET') {
+			const counts = await stub.getCounts();
+			return new Response(JSON.stringify(counts, null, 2), {
+				headers: { 'Content-Type': 'application/json' },
+			});
+		}
+
+		// POST /webhook - handle EventSub
+		if (request.method === 'POST') {
+			const body = await request.json() as any;
+
+			// Handle EventSub verification challenge
+			if (body.challenge) {
+				console.log('✓ EventSub verification challenge received');
+				return new Response(body.challenge, {
+					headers: { 'Content-Type': 'text/plain' },
+				});
+			}
+
+			// Handle EventSub notification
+			if (body.subscription && body.subscription.type) {
+				const eventType = body.subscription.type;
+
+				// Increment count in Durable Object
+				await stub.incrementEvent(eventType);
+
+				// Get all counts and log table
+				const counts = await stub.getCounts();
+				console.log('\n📊 Event Counts:');
+				console.table(counts);
+
+				// Return counts in response
+				return new Response(JSON.stringify(counts, null, 2), {
+					status: 200,
+					headers: { 'Content-Type': 'application/json' },
+				});
+			}
+
+			return new Response('Bad Request', { status: 400 });
+		}
+
+		return new Response('Method Not Allowed', { status: 405 });
 	},
 } satisfies ExportedHandler<Env>;

@@ -8,7 +8,8 @@
     "build": "wrangler deploy --dry-run",
     "deploy": "wrangler deploy",
     "typecheck": "tsc --noEmit",
-    "cf-typegen": "wrangler types"
+    "cf-typegen": "wrangler types",
+    "test:event": "./scripts/send-random-event.sh"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20250423.0",
