@@ -1,0 +1,24 @@
+name = "streamling-state"
+main = "src/index.ts"
+compatibility_date = "2025-10-23"
+
+[durable_objects]
+bindings = [{ name = "STREAMLING_STATE", class_name = "StreamlingState" }]
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["StreamlingState"]
+
+# Vars: non-secret config (Client ID used in Helix calls)
+[vars]
+TWITCH_CLIENT_ID = "REPLACE_ME"
+
+# Secrets to set (do not commit); not strictly needed on the worker if OAuth runs in SvelteKit:
+# wrangler secret put TWITCH_CLIENT_SECRET
+
+# Local dev ports:
+[dev]
+port = 8787
+
+[observability]
+enabled = true

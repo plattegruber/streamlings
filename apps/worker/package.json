@@ -1,0 +1,21 @@
+{
+  "name": "@streamlings/worker",
+  "version": "0.0.1",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "wrangler dev",
+    "build": "wrangler deploy --dry-run",
+    "deploy": "wrangler deploy",
+    "typecheck": "tsc --noEmit",
+    "cf-typegen": "wrangler types"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250423.0",
+    "typescript": "^5.5.4",
+    "wrangler": "^4.45.0"
+  },
+  "dependencies": {
+    "@streamlings/shared": "workspace:*"
+  }
+}
