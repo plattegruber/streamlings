@@ -69,3 +69,7 @@ playwright-report/
 .eslintcache
 .stylelintcache
 *.tgz
+
+# Cloudflare Workers
+worker-configuration.d.ts
+.wrangler/

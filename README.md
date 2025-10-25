@@ -1,5 +1,38 @@
 # streamlings
-A little pet that lives on your stream and responds to chat. It’s like a Tamagotchi powered by your audience.
+A little pet that lives on your stream and responds to chat. It's like a Tamagotchi powered by your audience.
+
+## Setup
+
+```bash
+# Install dependencies
+pnpm install
+```
+
+## Testing
+
+All tests run automatically on push/PR via GitHub Actions.
+
+To run tests locally:
+
+```bash
+# Run all tests
+pnpm --filter @streamlings/worker test
+
+# Watch mode
+pnpm --filter @streamlings/worker test:watch
+```
+
+### Branch Protection
+
+To enforce tests on the `main` branch:
+
+1. Go to **Settings** → **Branches** → **Add branch protection rule**
+2. Branch name pattern: `main`
+3. Enable: **Require status checks to pass before merging**
+4. Select status check: **test**
+5. Save changes
+
+This ensures all tests must pass before code can be merged to main.
 
 ### Devlog
 - installed the [Twitch CLI](https://dev.twitch.tv/docs/cli/), mostly so that I can emulate incoming [EventSubs](https://dev.twitch.tv/docs/eventsub/).

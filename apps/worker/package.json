@@ -7,6 +7,8 @@
     "dev": "wrangler dev",
     "build": "wrangler deploy --dry-run",
     "deploy": "wrangler deploy",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "cf-typegen": "wrangler types",
     "test:verify": "twitch event verify-subscription channel.follow -F http://localhost:8787/webhook",
@@ -15,6 +17,7 @@
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20250423.0",
     "typescript": "^5.5.4",
+    "vitest": "^2.1.8",
     "wrangler": "^4.45.0"
   },
   "dependencies": {
