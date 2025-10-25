@@ -18,6 +18,22 @@ pnpm dev
 
 The worker will be available at `http://localhost:8787`
 
+### Verifying Challenge Response
+
+Before sending events, verify that your webhook correctly handles EventSub challenge verification:
+
+```bash
+# Verify the challenge response works
+pnpm test:verify
+
+# Or use the Twitch CLI directly
+twitch event verify-subscription channel.follow -F http://localhost:8787/webhook
+```
+
+You should see:
+- ✔ Valid response. Received challenge [ID] in body
+- ✔ Valid status code. Received status 200
+
 ### Testing EventSub Integration
 
 With the worker running, open a second terminal and send test events:

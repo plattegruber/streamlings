@@ -9,6 +9,7 @@
     "deploy": "wrangler deploy",
     "typecheck": "tsc --noEmit",
     "cf-typegen": "wrangler types",
+    "test:verify": "twitch event verify-subscription channel.follow -F http://localhost:8787/webhook",
     "test:event": "./scripts/send-random-event.sh"
   },
   "devDependencies": {
