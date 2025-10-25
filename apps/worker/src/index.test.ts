@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { unstable_dev } from 'wrangler';
-import type { UnstableDevWorker } from 'wrangler';
+import type { Unstable_DevWorker } from 'wrangler';
 
 describe('Streamlings Worker', () => {
-	let worker: UnstableDevWorker;
+	let worker: Unstable_DevWorker;
 
 	beforeAll(async () => {
 		worker = await unstable_dev('src/index.ts', {
@@ -34,6 +34,14 @@ describe('Streamlings Worker', () => {
 	});
 
 	it('should count events and return counts', async () => {
+		// Get initial counts
+		const initialResp = await worker.fetch('http://localhost:8787/webhook', {
+			method: 'GET',
+		});
+		const initialCounts = await initialResp.json() as Record<string, number>;
+		const initialFollowCount = initialCounts['channel.follow'] || 0;
+		const initialCheerCount = initialCounts['channel.cheer'] || 0;
+
 		// Send a channel.follow event
 		const followResp = await worker.fetch('http://localhost:8787/webhook', {
 			method: 'POST',
@@ -45,8 +53,8 @@ describe('Streamlings Worker', () => {
 		});
 
 		expect(followResp.status).toBe(200);
-		const followCounts = await followResp.json();
-		expect(followCounts).toHaveProperty('channel.follow', 1);
+		const followCounts = await followResp.json() as Record<string, number>;
+		expect(followCounts['channel.follow']).toBe(initialFollowCount + 1);
 
 		// Send another channel.follow event
 		const followResp2 = await worker.fetch('http://localhost:8787/webhook', {
@@ -58,8 +66,8 @@ describe('Streamlings Worker', () => {
 			}),
 		});
 
-		const followCounts2 = await followResp2.json();
-		expect(followCounts2['channel.follow']).toBe(2);
+		const followCounts2 = await followResp2.json() as Record<string, number>;
+		expect(followCounts2['channel.follow']).toBe(initialFollowCount + 2);
 
 		// Send a different event type
 		const cheerResp = await worker.fetch('http://localhost:8787/webhook', {
@@ -71,9 +79,9 @@ describe('Streamlings Worker', () => {
 			}),
 		});
 
-		const cheerCounts = await cheerResp.json();
-		expect(cheerCounts['channel.follow']).toBe(2);
-		expect(cheerCounts['channel.cheer']).toBe(1);
+		const cheerCounts = await cheerResp.json() as Record<string, number>;
+		expect(cheerCounts['channel.follow']).toBe(initialFollowCount + 2);
+		expect(cheerCounts['channel.cheer']).toBe(initialCheerCount + 1);
 	});
 
 	it('should return current counts via GET /webhook', async () => {
@@ -82,7 +90,7 @@ describe('Streamlings Worker', () => {
 		});
 
 		expect(resp.status).toBe(200);
-		const counts = await resp.json();
+		const counts = await resp.json() as Record<string, number>;
 		expect(counts).toHaveProperty('channel.follow');
 		expect(counts).toHaveProperty('channel.cheer');
 	});

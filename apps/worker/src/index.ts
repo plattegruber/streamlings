@@ -9,6 +9,14 @@ export class StreamlingState extends DurableObject<Env> {
 	constructor(ctx: DurableObjectState, env: Env) {
 		super(ctx, env);
 		this.eventCounts = new Map();
+
+		// Load persisted counts from storage on initialization
+		ctx.blockConcurrencyWhile(async () => {
+			const stored = await ctx.storage.get<Record<string, number>>('event_counts');
+			if (stored) {
+				this.eventCounts = new Map(Object.entries(stored));
+			}
+		});
 	}
 
 	/**
@@ -17,6 +25,9 @@ export class StreamlingState extends DurableObject<Env> {
 	async incrementEvent(eventType: string): Promise<void> {
 		const current = this.eventCounts.get(eventType) || 0;
 		this.eventCounts.set(eventType, current + 1);
+
+		// Persist to storage
+		await this.ctx.storage.put('event_counts', Object.fromEntries(this.eventCounts));
 	}
 
 	/**
