@@ -1,0 +1,14 @@
+name = "twitch-eventsub"
+main = "src/index.ts"
+compatibility_date = "2025-10-23"
+
+# Vars: configuration for the adapter
+[vars]
+STREAMLING_STATE_URL = "http://localhost:8787"
+
+# Local dev ports
+[dev]
+port = 8788
+
+[observability]
+enabled = true

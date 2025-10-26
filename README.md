@@ -1,12 +1,57 @@
 # streamlings
 A little pet that lives on your stream and responds to chat. It's like a Tamagotchi powered by your audience.
 
+## Architecture
+
+Streamlings uses a multi-worker architecture with platform adapters:
+
+- **apps/twitch-eventsub** - Twitch EventSub adapter (port 8788)
+  - Receives Twitch webhooks
+  - Maps Twitch user IDs → internal user IDs
+  - Forwards to StreamlingState worker
+
+- **apps/streamling-state** - Core state management (port 8787)
+  - Platform-agnostic Durable Object storage
+  - Tracks event counts and streamling state
+  - Can receive events from multiple platform adapters
+
+- **apps/web** - SvelteKit web dashboard
+  - User-facing management interface
+
+This design allows supporting multiple streaming platforms (YouTube, Facebook, etc.) by adding new adapter workers.
+
 ## Setup
 
 ```bash
 # Install dependencies
 pnpm install
 ```
+
+## Local Development
+
+### Running the Full Stack
+
+Start both workers in separate terminals:
+
+**Terminal 1: StreamlingState (core)**
+```bash
+cd apps/streamling-state
+pnpm dev  # Runs on :8787
+```
+
+**Terminal 2: Twitch EventSub (adapter)**
+```bash
+cd apps/twitch-eventsub
+pnpm dev  # Runs on :8788
+```
+
+**Terminal 3: Send test events**
+```bash
+cd apps/twitch-eventsub
+pnpm test:event  # Sends random Twitch event
+```
+
+Events flow: Twitch CLI → twitch-eventsub (:8788) → streamling-state (:8787)
 
 ## Testing
 

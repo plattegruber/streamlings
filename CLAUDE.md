@@ -4,26 +4,50 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Streamlings is a Twitch-integrated interactive pet that lives on stream and responds to chat - like a Tamagotchi powered by your audience. The project uses a pnpm workspace monorepo architecture with two main applications and a shared types package.
+Streamlings is a multi-platform interactive pet that lives on stream and responds to chat - like a Tamagotchi powered by your audience. The project uses a pnpm workspace monorepo with a multi-worker architecture that supports multiple streaming platforms.
 
 ## Architecture
 
 ### Workspace Structure
 
+**Platform Adapters** (receive platform-specific events):
+
+- **apps/twitch-eventsub**: Twitch EventSub adapter (port 8788)
+  - Receives Twitch EventSub webhooks
+  - Maps Twitch user IDs → internal user IDs
+  - Forwards events to StreamlingState worker
+  - Handles EventSub challenge verification
+
+**Core Workers**:
+
+- **apps/streamling-state**: Platform-agnostic state management (port 8787)
+  - Receives events from platform adapters
+  - Uses Durable Objects (StreamlingState) for stateful storage
+  - Tracks event counts and streamling state persistently
+  - Platform-agnostic - works with any adapter
+
+**Frontend**:
+
 - **apps/web**: SvelteKit application using Svelte 5, deployed to Cloudflare Pages
   - Frontend for the streamling visualization and user dashboard
   - Database layer using Drizzle ORM with libSQL/SQLite
-  - Handles Twitch OAuth flow and user management
+  - Handles OAuth flow and user management
   - Uses TailwindCSS v4 for styling
 
-- **apps/streamling-state**: Cloudflare Worker for handling Twitch events
-  - Receives Twitch EventSub webhooks
-  - Uses Durable Objects (StreamlingState) for stateful event processing and storage
-  - Tracks event counts and streamling state persistently
+**Shared**:
 
 - **packages/shared**: Shared TypeScript types
   - Currently exports `TwitchEventPayload` and `InstallUserTokenBody`
-  - Used by both web and worker apps for type safety
+  - Used by all apps for type safety
+
+### Event Flow
+
+```
+Twitch EventSub → twitch-eventsub (:8788) → streamling-state (:8787)
+                   [Maps IDs]                 [Stores state]
+```
+
+This architecture allows adding new platform adapters (YouTube, Facebook, etc.) without changing core logic.
 
 ### Key Technologies
 
@@ -103,11 +127,50 @@ pnpm deploy
 
 # Run tests
 pnpm test
+```
+
+### Twitch EventSub Adapter (apps/twitch-eventsub):
+
+```bash
+cd apps/twitch-eventsub
+
+# Local development (runs on port 8788)
+pnpm dev
+
+# Build (dry-run deployment)
+pnpm build
+
+# Deploy to Cloudflare
+pnpm deploy
+
+# Run tests
+pnpm test
 
 # Test EventSub integration
 pnpm test:verify  # Verify challenge response
-pnpm test:event   # Send random test event
+pnpm test:event   # Send random test event (forwards to streamling-state)
 ```
+
+### Local Development Workflow
+
+To test the full event flow:
+
+1. **Terminal 1**: Start StreamlingState worker
+   ```bash
+   cd apps/streamling-state && pnpm dev
+   ```
+
+2. **Terminal 2**: Start Twitch EventSub adapter
+   ```bash
+   cd apps/twitch-eventsub && pnpm dev
+   ```
+
+3. **Terminal 3**: Send test events
+   ```bash
+   cd apps/twitch-eventsub && pnpm test:event
+   ```
+
+Events will flow: Twitch CLI → adapter (:8788) → streamling-state (:8787)
 
 ## Environment Setup
 
