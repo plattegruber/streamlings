@@ -79,6 +79,54 @@ To enforce tests on the `main` branch:
 
 This ensures all tests must pass before code can be merged to main.
 
+## Deployment
+
+### Automatic Deployments
+
+Pushing to `main` automatically deploys both workers to production via GitHub Actions:
+
+1. **Typecheck** - Validates TypeScript in all workers
+2. **Deploy Preview** - Creates ephemeral preview deployments
+3. **Smoke Tests** - Verifies preview deployments work
+4. **Deploy Production** - Auto-promotes to prod if tests pass
+
+No manual steps required! Just `git push origin main`.
+
+### Required GitHub Secrets
+
+Configure these in **Settings → Secrets → Actions**:
+
+- `CLOUDFLARE_API_TOKEN` - Your Cloudflare API token
+- `CLOUDFLARE_ACCOUNT_ID` - Your Cloudflare account ID
+
+Get your API token from [Cloudflare Dashboard → My Profile → API Tokens](https://dash.cloudflare.com/profile/api-tokens).
+
+### Manual Deployment
+
+To deploy manually:
+
+```bash
+# Deploy to preview
+cd apps/streamling-state
+pnpm wrangler deploy --env preview
+
+cd apps/twitch-eventsub
+pnpm wrangler deploy --env preview
+
+# Deploy to production
+cd apps/streamling-state
+pnpm wrangler deploy --env prod
+
+cd apps/twitch-eventsub
+pnpm wrangler deploy --env prod
+```
+
+### Environments
+
+- **Local dev** - Port 8787 (streamling-state) and 8788 (twitch-eventsub)
+- **Preview** - `*-preview.*.workers.dev` (ephemeral, for CI/CD)
+- **Production** - `*-prod.*.workers.dev` (stable, public-facing)
+
 ### Devlog
 - installed the [Twitch CLI](https://dev.twitch.tv/docs/cli/), mostly so that I can emulate incoming [EventSubs](https://dev.twitch.tv/docs/eventsub/).
 - installed the [Wrangler CLI](https://developers.cloudflare.com/workers/wrangler/) so that we can develop Workers locally (and eventually deploy).

@@ -9,16 +9,20 @@ bindings = [{ name = "STREAMLING_STATE", class_name = "StreamlingState" }]
 tag = "v1"
 new_sqlite_classes = ["StreamlingState"]
 
-# Vars: non-secret config (Client ID used in Helix calls)
-[vars]
-TWITCH_CLIENT_ID = "REPLACE_ME"
-
-# Secrets to set (do not commit); not strictly needed on the worker if OAuth runs in SvelteKit:
-# wrangler secret put TWITCH_CLIENT_SECRET
-
 # Local dev ports:
 [dev]
 port = 8787
 
 [observability]
 enabled = true
+
+# Preview environment (ephemeral, for CI/CD smoke tests)
+[env.preview]
+name = "streamling-state-preview"
+vars = { TWITCH_CLIENT_ID = "preview" }
+
+# Production environment
+[env.prod]
+name = "streamling-state-prod"
+# vars.TWITCH_CLIENT_ID set via wrangler secret or --var flag
+# Secrets: wrangler secret put TWITCH_CLIENT_SECRET --env prod

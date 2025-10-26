@@ -2,13 +2,20 @@ name = "twitch-eventsub"
 main = "src/index.ts"
 compatibility_date = "2025-10-23"
 
-# Vars: configuration for the adapter
-[vars]
-STREAMLING_STATE_URL = "http://localhost:8787"
-
 # Local dev ports
 [dev]
 port = 8788
+vars = { STREAMLING_STATE_URL = "http://localhost:8787" }
 
 [observability]
 enabled = true
+
+# Preview environment (ephemeral, for CI/CD smoke tests)
+[env.preview]
+name = "twitch-eventsub-preview"
+# STREAMLING_STATE_URL passed via --var in CI/CD
+
+# Production environment
+[env.prod]
+name = "twitch-eventsub-prod"
+# STREAMLING_STATE_URL passed via --var in CI/CD or set as wrangler secret

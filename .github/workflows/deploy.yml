@@ -1,0 +1,100 @@
+name: Deploy Workers
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/streamling-state/**"
+      - "apps/twitch-eventsub/**"
+      - "packages/shared/**"
+      - "pnpm-lock.yaml"
+      - "package.json"
+      - "pnpm-workspace.yaml"
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck shared package
+        run: pnpm --filter @streamlings/shared typecheck || echo "No typecheck script in shared"
+
+      - name: Typecheck streamling-state worker
+        run: pnpm --filter @streamlings/streamling-state typecheck
+
+      - name: Typecheck twitch-eventsub worker
+        run: pnpm --filter @streamlings/twitch-eventsub typecheck
+
+      - name: Deploy streamling-state to preview
+        id: deploy-state-preview
+        working-directory: apps/streamling-state
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          OUTPUT=$(pnpm wrangler deploy --env preview 2>&1)
+          echo "$OUTPUT"
+          URL=$(echo "$OUTPUT" | grep -oP 'https://[^ ]*workers\.dev' | head -1)
+          echo "preview_url=$URL" >> $GITHUB_OUTPUT
+
+      - name: Deploy twitch-eventsub to preview
+        id: deploy-eventsub-preview
+        working-directory: apps/twitch-eventsub
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          # Update STREAMLING_STATE_URL to point to preview deployment
+          OUTPUT=$(pnpm wrangler deploy --env preview --var STREAMLING_STATE_URL:${{ steps.deploy-state-preview.outputs.preview_url }} 2>&1)
+          echo "$OUTPUT"
+          URL=$(echo "$OUTPUT" | grep -oP 'https://[^ ]*workers\.dev' | head -1)
+          echo "preview_url=$URL" >> $GITHUB_OUTPUT
+
+      - name: Smoke test streamling-state preview
+        run: |
+          echo "Testing streamling-state at ${{ steps.deploy-state-preview.outputs.preview_url }}"
+          curl -fsSL "${{ steps.deploy-state-preview.outputs.preview_url }}/webhook" || exit 1
+
+      - name: Smoke test twitch-eventsub preview
+        run: |
+          echo "Testing twitch-eventsub challenge at ${{ steps.deploy-eventsub-preview.outputs.preview_url }}"
+          RESPONSE=$(curl -fsSL -X POST "${{ steps.deploy-eventsub-preview.outputs.preview_url }}/webhook" \
+            -H "Content-Type: application/json" \
+            -d '{"challenge":"test-challenge-123"}')
+          if [ "$RESPONSE" != "test-challenge-123" ]; then
+            echo "Challenge test failed"
+            exit 1
+          fi
+
+      - name: Deploy streamling-state to production
+        id: deploy-state-prod
+        working-directory: apps/streamling-state
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          OUTPUT=$(pnpm wrangler deploy --env prod 2>&1)
+          echo "$OUTPUT"
+          URL=$(echo "$OUTPUT" | grep -oP 'https://[^ ]*workers\.dev' | head -1)
+          echo "prod_url=$URL" >> $GITHUB_OUTPUT
+
+      - name: Deploy twitch-eventsub to production
+        working-directory: apps/twitch-eventsub
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          pnpm wrangler deploy --env prod --var STREAMLING_STATE_URL:${{ steps.deploy-state-prod.outputs.prod_url }}
