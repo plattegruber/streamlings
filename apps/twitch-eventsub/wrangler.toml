@@ -16,9 +16,15 @@ enabled = true
 # Preview environment (ephemeral, for CI/CD smoke tests)
 [env.preview]
 name = "twitch-eventsub-preview"
-# STREAMLING_STATE_URL passed via --var in CI/CD
+
+[env.preview.vars]
+# STREAMLING_STATE_URL passed via --var in CI/CD (overrides this default)
+STREAMLING_STATE_URL = "http://localhost:8787"
 
 # Production environment
 [env.prod]
 name = "twitch-eventsub-prod"
-# STREAMLING_STATE_URL passed via --var in CI/CD or set as wrangler secret
+
+[env.prod.vars]
+# STREAMLING_STATE_URL passed via --var in CI/CD (overrides this default)
+STREAMLING_STATE_URL = "http://localhost:8787"
