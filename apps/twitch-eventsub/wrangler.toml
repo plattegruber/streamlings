@@ -2,10 +2,13 @@ name = "twitch-eventsub"
 main = "src/index.ts"
 compatibility_date = "2025-10-23"
 
+# Default vars (overridden by environment-specific configs)
+[vars]
+STREAMLING_STATE_URL = "http://localhost:8787"
+
 # Local dev ports
 [dev]
 port = 8788
-vars = { STREAMLING_STATE_URL = "http://localhost:8787" }
 
 [observability]
 enabled = true
