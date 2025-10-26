@@ -16,10 +16,10 @@ Streamlings is a Twitch-integrated interactive pet that lives on stream and resp
   - Handles Twitch OAuth flow and user management
   - Uses TailwindCSS v4 for styling
 
-- **apps/worker**: Cloudflare Worker for handling Twitch events
+- **apps/streamling-state**: Cloudflare Worker for handling Twitch events
   - Receives Twitch EventSub webhooks
-  - Uses Durable Objects (TwitchDO) for stateful event processing
-  - Communicates with the web app for state updates
+  - Uses Durable Objects (StreamlingState) for stateful event processing and storage
+  - Tracks event counts and streamling state persistently
 
 - **packages/shared**: Shared TypeScript types
   - Currently exports `TwitchEventPayload` and `InstallUserTokenBody`
@@ -87,10 +87,10 @@ pnpm lint         # Run Prettier + ESLint
 pnpm format       # Auto-format with Prettier
 ```
 
-### Worker (apps/worker):
+### Streamling State Worker (apps/streamling-state):
 
 ```bash
-cd apps/worker
+cd apps/streamling-state
 
 # Local development (runs on port 8787)
 pnpm dev
@@ -100,6 +100,13 @@ pnpm build
 
 # Deploy to Cloudflare
 pnpm deploy
+
+# Run tests
+pnpm test
+
+# Test EventSub integration
+pnpm test:verify  # Verify challenge response
+pnpm test:event   # Send random test event
 ```
 
 ## Environment Setup

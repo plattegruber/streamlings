@@ -1,6 +1,6 @@
-# Streamlings Worker
+# Streamling State Worker
 
-Cloudflare Worker with Durable Objects that handles Twitch EventSub webhooks.
+Cloudflare Worker with Durable Objects that handles Twitch EventSub webhooks and tracks streamling state.
 
 ## Local Development
 

@@ -25,5 +25,5 @@ jobs:
       - name: Install dependencies
         run: pnpm install
 
-      - name: Run worker tests
-        run: pnpm --filter @streamlings/worker test
+      - name: Run streamling-state tests
+        run: pnpm --filter @streamlings/streamling-state test

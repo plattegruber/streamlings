@@ -1,5 +1,5 @@
 {
-  "name": "@streamlings/worker",
+  "name": "@streamlings/streamling-state",
   "version": "0.0.1",
   "type": "module",
   "private": true,

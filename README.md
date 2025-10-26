@@ -16,10 +16,10 @@ To run tests locally:
 
 ```bash
 # Run all tests
-pnpm --filter @streamlings/worker test
+pnpm --filter @streamlings/streamling-state test
 
 # Watch mode
-pnpm --filter @streamlings/worker test:watch
+pnpm --filter @streamlings/streamling-state test:watch
 ```
 
 ### Branch Protection
