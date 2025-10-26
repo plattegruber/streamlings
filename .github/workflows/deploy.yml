@@ -29,6 +29,11 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Generate Cloudflare types
+        run: |
+          pnpm --filter @streamlings/streamling-state cf-typegen
+          pnpm --filter @streamlings/twitch-eventsub cf-typegen
+
       - name: Typecheck shared package
         run: pnpm --filter @streamlings/shared typecheck || echo "No typecheck script in shared"
 
