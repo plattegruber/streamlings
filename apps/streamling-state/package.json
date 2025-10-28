@@ -12,7 +12,9 @@
     "typecheck": "tsc --noEmit",
     "cf-typegen": "wrangler types",
     "test:verify": "twitch event verify-subscription channel.follow -F http://localhost:8787/webhook",
-    "test:event": "./scripts/send-random-event.sh"
+    "test:event": "./scripts/send-random-event.sh",
+    "test:chat": "./scripts/send-chat-events.sh",
+    "test:burst": "./scripts/send-burst-events.sh"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20250423.0",
