@@ -50,5 +50,9 @@
 		"vite-plugin-devtools-json": "^1.0.0",
 		"vitest": "^3.2.4",
 		"vitest-browser-svelte": "^1.1.0"
+	},
+	"dependencies": {
+		"@clerk/backend": "^2.19.0",
+		"svelte-clerk": "^0.17.6"
 	}
 }
