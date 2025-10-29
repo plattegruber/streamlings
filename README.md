@@ -127,6 +127,51 @@ pnpm wrangler deploy --env prod
 - **Preview** - `*-preview.*.workers.dev` (ephemeral, for CI/CD)
 - **Production** - `*-prod.*.workers.dev` (stable, public-facing)
 
+```mermaid
+flowchart LR
+
+  %% === External Services ===
+  subgraph Twitch
+    ES["Twitch EventSub (follows, subs, cheers, chat)"]
+  end
+
+  subgraph Streamer
+    OBS["OBS Browser Source (Streamlings overlay)"]
+  end
+
+  subgraph UserBrowser
+    DASH["Streamlings Dashboard UI (logged in with Clerk)"]
+  end
+
+  %% === Our Infra Control Plane ===
+  subgraph CFWorkers["Cloudflare Workers / API Edge"]
+    API["Public API Routes (REST / JSON)"]
+    WH["Event Ingest Worker (EventSub webhook)"]
+  end
+
+  subgraph ControlPlane["Control Plane (Stateless / DB-backed)"]
+    DB["Primary DB (users, plans, streamer mapping)"]
+    Clerk["Clerk Auth (OIDC / JWT / session)"]
+  end
+
+  %% === Our Infra Data Plane ===
+  subgraph DataPlane["Data Plane (Stateful / Realtime)"]
+    DO["StreamerActorDO (Durable Object per streamer)"]
+  end
+
+  %% === Flows ===
+  ES -->|"HTTP Webhook (EventSub POST)"| WH
+  WH -->|"Route by streamer_id"| DO
+  OBS <-->|"WebSocket live state"| DO
+  DASH -->|"Login / session"| Clerk
+  DASH -->|"PATCH /streamer/:id/theme"| API
+  API -->|"Verify token"| Clerk
+  API -->|"Lookup ownership / plan tier"| DB
+  API -->|"Command (wakeUp, setTheme)"| DO
+  DO -->|"Emit snapshots / metrics"| DB
+```
+
+
 ### Devlog
 - installed the [Twitch CLI](https://dev.twitch.tv/docs/cli/), mostly so that I can emulate incoming [EventSubs](https://dev.twitch.tv/docs/eventsub/).
 - installed the [Wrangler CLI](https://developers.cloudflare.com/workers/wrangler/) so that we can develop Workers locally (and eventually deploy).
