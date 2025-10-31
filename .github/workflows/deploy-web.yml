@@ -117,7 +117,7 @@ jobs:
               -H "Content-Type: application/json" > "$tmpdir/databases.json"
 
             local db_id
-            db_id=$(python3 -c "import json, pathlib, sys; data=json.loads(pathlib.Path(sys.argv[1]).read_text()); name=sys.argv[2]; print(next((entry.get('uuid', '') for entry in data.get('result', []) if entry.get('name') == name), '')))" \
+            db_id=$(python3 -c "import json, pathlib, sys; data=json.loads(pathlib.Path(sys.argv[1]).read_text()); name=sys.argv[2]; result=data.get('result') or []; print(next((entry.get('uuid', '') for entry in result if isinstance(entry, dict) and entry.get('name') == name), ''))" \
               "$tmpdir/databases.json" "$db_name")
 
             if [ -z "$db_id" ]; then
@@ -127,10 +127,10 @@ jobs:
                 -H "Content-Type: application/json" \
                 --data "{\"name\":\"${db_name}\"}" > "$create_target"
 
-              python3 -c "import json, pathlib, sys; data=json.loads(pathlib.Path(sys.argv[1]).read_text()); if not data.get('success'): print(json.dumps(data), file=sys.stderr); sys.exit(1)" \
+              python3 -c "import json, pathlib, sys; data=json.loads(pathlib.Path(sys.argv[1]).read_text()); (print(json.dumps(data), file=sys.stderr), sys.exit(1)) if not data.get('success') else None" \
                 "$create_target"
 
-              db_id=$(python3 -c "import json, pathlib, sys; data=json.loads(pathlib.Path(sys.argv[1]).read_text()); print(data.get('result', {}).get('uuid', ''))" \
+              db_id=$(python3 -c "import json, pathlib, sys; data=json.loads(pathlib.Path(sys.argv[1]).read_text()); result=data.get('result') or {}; print(result.get('uuid', '') if isinstance(result, dict) else '')" \
                 "$create_target")
 
               if [ -z "$db_id" ]; then
@@ -157,7 +157,7 @@ jobs:
             -H "Content-Type: application/json" \
             --data @"$tmpdir/payload.json" > "$tmpdir/update-response.json"
 
-          python3 -c "import json, pathlib, sys; data=json.loads(pathlib.Path(sys.argv[1]).read_text()); if not data.get('success'): print(json.dumps(data), file=sys.stderr); sys.exit(1)" \
+          python3 -c "import json, pathlib, sys; data=json.loads(pathlib.Path(sys.argv[1]).read_text()); (print(json.dumps(data), file=sys.stderr), sys.exit(1)) if not data.get('success') else None" \
             "$tmpdir/update-response.json"
 
           echo "prod_db_id=${PROD_DB_ID}" >> "$GITHUB_OUTPUT"
