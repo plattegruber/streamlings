@@ -67,12 +67,24 @@ jobs:
       - name: Smoke test preview deployment
         run: |
           echo "Testing web app at ${{ steps.deploy-preview.outputs.preview_url }}"
-          STATUS=$(curl -o /dev/null -s -w "%{http_code}" "${{ steps.deploy-preview.outputs.preview_url }}")
-          if [ "$STATUS" != "200" ]; then
-            echo "Preview deployment health check failed with status: $STATUS"
-            exit 1
-          fi
-          echo "Preview deployment successful!"
+          echo "Waiting for deployment to be fully available..."
+
+          # Retry up to 10 times with 6 second delays (1 minute total)
+          for i in {1..10}; do
+            echo "Attempt $i/10..."
+            STATUS=$(curl -o /dev/null -s -w "%{http_code}" "${{ steps.deploy-preview.outputs.preview_url }}" || echo "000")
+
+            if [ "$STATUS" = "200" ]; then
+              echo "✅ Preview deployment successful!"
+              exit 0
+            fi
+
+            echo "Status: $STATUS - waiting 6 seconds before retry..."
+            sleep 6
+          done
+
+          echo "❌ Preview deployment health check failed after 10 attempts"
+          exit 1
 
       - name: Deploy to Cloudflare Pages (Production)
         id: deploy-prod
@@ -89,10 +101,22 @@ jobs:
       - name: Smoke test production deployment
         run: |
           echo "Testing production at ${{ steps.deploy-prod.outputs.prod_url }}"
-          STATUS=$(curl -o /dev/null -s -w "%{http_code}" "${{ steps.deploy-prod.outputs.prod_url }}")
-          if [ "$STATUS" != "200" ]; then
-            echo "Production deployment health check failed with status: $STATUS"
-            exit 1
-          fi
-          echo "Production deployment successful!"
-          echo "🚀 Web app deployed to: ${{ steps.deploy-prod.outputs.prod_url }}"
+          echo "Waiting for deployment to be fully available..."
+
+          # Retry up to 10 times with 6 second delays (1 minute total)
+          for i in {1..10}; do
+            echo "Attempt $i/10..."
+            STATUS=$(curl -o /dev/null -s -w "%{http_code}" "${{ steps.deploy-prod.outputs.prod_url }}" || echo "000")
+
+            if [ "$STATUS" = "200" ]; then
+              echo "✅ Production deployment successful!"
+              echo "🚀 Web app deployed to: ${{ steps.deploy-prod.outputs.prod_url }}"
+              exit 0
+            fi
+
+            echo "Status: $STATUS - waiting 6 seconds before retry..."
+            sleep 6
+          done
+
+          echo "❌ Production deployment health check failed after 10 attempts"
+          exit 1
