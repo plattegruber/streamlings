@@ -108,6 +108,8 @@ jobs:
             echo "✔ Cloudflare Pages project '${PROJECT_NAME}' already exists."
           fi
 
+          D1_SUPPORT_AVAILABLE=true
+
           fetch_database_id() {
             local db_name="$1"
             local create_target="$2"
@@ -116,9 +118,19 @@ jobs:
               -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
               -H "Content-Type: application/json" > "$tmpdir/databases.json"
 
+            local python_status=0
             local db_id
-            db_id=$(python3 -c "import json, pathlib, sys; data=json.loads(pathlib.Path(sys.argv[1]).read_text()); name=sys.argv[2]; result=data.get('result') or []; print(next((entry.get('uuid', '') for entry in result if isinstance(entry, dict) and entry.get('name') == name), ''))" \
-              "$tmpdir/databases.json" "$db_name")
+            db_id=$(python3 -c "import json, pathlib, sys; data=json.loads(pathlib.Path(sys.argv[1]).read_text()); name=sys.argv[2]; success=data.get('success', True); errors=data.get('errors'); result=data.get('result') or []; (print(json.dumps({'operation': 'list_databases', 'errors': errors or data}), file=sys.stderr), sys.exit(2)) if not success else None; print(next((entry.get('uuid', '') for entry in result if isinstance(entry, dict) and entry.get('name') == name), ''))" \
+              "$tmpdir/databases.json" "$db_name") || python_status=$?
+
+            if [ "$python_status" -eq 2 ]; then
+              echo "Warning: Cloudflare API returned an error while listing D1 databases for '${db_name}'. Skipping D1 setup." >&2
+              D1_SUPPORT_AVAILABLE=false
+              echo ""
+              return 0
+            elif [ "$python_status" -ne 0 ]; then
+              return "$python_status"
+            fi
 
             if [ -z "$db_id" ]; then
               echo "Cloudflare D1 database '${db_name}' not found. Creating it..."
@@ -127,15 +139,31 @@ jobs:
                 -H "Content-Type: application/json" \
                 --data "{\"name\":\"${db_name}\"}" > "$create_target"
 
-              python3 -c "import json, pathlib, sys; data=json.loads(pathlib.Path(sys.argv[1]).read_text()); (print(json.dumps(data), file=sys.stderr), sys.exit(1)) if not data.get('success') else None" \
-                "$create_target"
+              python_status=0
+              python3 -c "import json, pathlib, sys; data=json.loads(pathlib.Path(sys.argv[1]).read_text()); errors=data.get('errors'); (print(json.dumps({'operation': 'create_database', 'errors': errors or data}), file=sys.stderr), sys.exit(2)) if not data.get('success', True) else None" \
+                "$create_target" || python_status=$?
 
+              if [ "$python_status" -eq 2 ]; then
+                echo "Warning: Cloudflare API returned an error while creating D1 database '${db_name}'. Skipping D1 setup." >&2
+                D1_SUPPORT_AVAILABLE=false
+                echo ""
+                return 0
+              elif [ "$python_status" -ne 0 ]; then
+                return "$python_status"
+              fi
+
+              python_status=0
               db_id=$(python3 -c "import json, pathlib, sys; data=json.loads(pathlib.Path(sys.argv[1]).read_text()); result=data.get('result') or {}; print(result.get('uuid', '') if isinstance(result, dict) else '')" \
-                "$create_target")
+                "$create_target") || python_status=$?
+              if [ "$python_status" -ne 0 ]; then
+                return "$python_status"
+              fi
 
               if [ -z "$db_id" ]; then
                 echo "Failed to determine ID for database '${db_name}'." >&2
-                exit 1
+                D1_SUPPORT_AVAILABLE=false
+                echo ""
+                return 0
               fi
 
               echo "✔ Created Cloudflare D1 database '${db_name}'."
@@ -147,7 +175,22 @@ jobs:
           }
 
           PROD_DB_ID=$(fetch_database_id "${D1_DATABASE_NAME}" "$tmpdir/prod-db.json")
+
+          if [ "$D1_SUPPORT_AVAILABLE" != true ]; then
+            echo "Warning: Cloudflare D1 API not accessible with provided credentials; skipping D1 configuration updates."
+            echo "prod_db_id=" >> "$GITHUB_OUTPUT"
+            echo "preview_db_id=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
           PREVIEW_DB_ID=$(fetch_database_id "${D1_PREVIEW_DATABASE_NAME}" "$tmpdir/preview-db.json")
+
+          if [ "$D1_SUPPORT_AVAILABLE" != true ]; then
+            echo "Warning: Cloudflare D1 API not accessible with provided credentials; skipping D1 configuration updates."
+            echo "prod_db_id=" >> "$GITHUB_OUTPUT"
+            echo "preview_db_id=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
 
           python3 -c "import json, pathlib, sys; payload_path=sys.argv[1]; prod_id=sys.argv[2]; preview_id=sys.argv[3]; payload={'deployment_configs': {'production': {'d1_databases': [{'binding': 'DB', 'database_id': prod_id}]}, 'preview': {'d1_databases': [{'binding': 'DB', 'database_id': preview_id}]}}}; pathlib.Path(payload_path).write_text(json.dumps(payload))" \
             "$tmpdir/payload.json" "$PROD_DB_ID" "$PREVIEW_DB_ID"
