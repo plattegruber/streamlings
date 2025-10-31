@@ -4,6 +4,9 @@ import { sequence } from '@sveltejs/kit/hooks';
 
 const clerkHandler = withClerkHandler();
 
+/**
+ * @type {import('@sveltejs/kit').Handle}
+ */
 const protectedRoutes = async ({ event, resolve }) => {
 	const { userId } = event.locals.auth();
 
