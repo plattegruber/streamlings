@@ -29,8 +29,6 @@ jobs:
       PROJECT_NAME: streamlings-web
       PRODUCTION_BRANCH: main
       PREVIEW_BRANCH: gha-preview-${{ github.run_id }}
-      D1_DATABASE_NAME: streamlings-db
-      D1_PREVIEW_DATABASE_NAME: streamlings-db-preview
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
@@ -76,166 +74,16 @@ jobs:
             echo "present=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Ensure Cloudflare resources
+      - name: Validate Cloudflare D1 databases
         if: steps.cf-creds.outputs.present == 'true'
-        id: ensure-resources
         working-directory: apps/web
         shell: bash
         run: |
           set -euo pipefail
 
-          API_BASE="https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}"
-          PROJECTS_ENDPOINT="${API_BASE}/pages/projects"
-          D1_ENDPOINT="${API_BASE}/d1/database"
-
-          tmpdir=$(mktemp -d)
-          trap 'rm -rf "$tmpdir"' EXIT
-
-          echo "Checking for existing Cloudflare Pages project '${PROJECT_NAME}'..."
-          curl -sS -X GET "$PROJECTS_ENDPOINT" \
-            -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
-            -H "Content-Type: application/json" > "$tmpdir/projects.json"
-
-          if ! python3 -c "import json, pathlib, sys; data=json.loads(pathlib.Path(sys.argv[1]).read_text()); name=sys.argv[2]; sys.exit(0 if any(project.get('name') == name for project in data.get('result', [])) else 1)" \
-            "$tmpdir/projects.json" "$PROJECT_NAME"; then
-            echo "Cloudflare Pages project '${PROJECT_NAME}' not found. Creating it..."
-            pnpm exec wrangler pages project create "${PROJECT_NAME}" --production-branch "${PRODUCTION_BRANCH}"
-            curl -sS -X GET "$PROJECTS_ENDPOINT" \
-              -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
-              -H "Content-Type: application/json" > "$tmpdir/projects.json"
-            echo "✔ Created Cloudflare Pages project '${PROJECT_NAME}'."
-          else
-            echo "✔ Cloudflare Pages project '${PROJECT_NAME}' already exists."
-          fi
-
-          fetch_database_id() {
-            local __resultvar="$1"
-            shift
-            local db_name="$1"
-            local create_target="$2"
-
-            curl -sS -X GET "$D1_ENDPOINT" \
-              -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
-              -H "Content-Type: application/json" > "$tmpdir/databases.json"
-
-            local python_status=0
-            local db_id
-            db_id=$(python3 -c "import json, pathlib, sys; data=json.loads(pathlib.Path(sys.argv[1]).read_text()); name=sys.argv[2]; success=data.get('success', True); errors=data.get('errors'); result=data.get('result') or []; (print(json.dumps({'operation': 'list_databases', 'errors': errors or data}), file=sys.stderr), sys.exit(2)) if not success else None; print(next((entry.get('uuid', '') for entry in result if isinstance(entry, dict) and entry.get('name') == name), ''))" \
-              "$tmpdir/databases.json" "$db_name") || python_status=$?
-
-            if [ "$python_status" -eq 2 ]; then
-              echo "Warning: Cloudflare API returned an error while listing D1 databases for '${db_name}'. Skipping D1 setup." >&2
-              printf -v "$__resultvar" ''
-              return 2
-            elif [ "$python_status" -ne 0 ]; then
-              return "$python_status"
-            fi
-
-            if [ -z "$db_id" ]; then
-              echo "Cloudflare D1 database '${db_name}' not found. Creating it..."
-              curl -sS -X POST "$D1_ENDPOINT" \
-                -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
-                -H "Content-Type: application/json" \
-                --data "{\"name\":\"${db_name}\"}" > "$create_target"
-
-              python_status=0
-              python3 -c "import json, pathlib, sys; data=json.loads(pathlib.Path(sys.argv[1]).read_text()); errors=data.get('errors'); (print(json.dumps({'operation': 'create_database', 'errors': errors or data}), file=sys.stderr), sys.exit(2)) if not data.get('success', True) else None" \
-                "$create_target" || python_status=$?
-
-              if [ "$python_status" -eq 2 ]; then
-                echo "Warning: Cloudflare API returned an error while creating D1 database '${db_name}'. Skipping D1 setup." >&2
-                printf -v "$__resultvar" ''
-                return 2
-              elif [ "$python_status" -ne 0 ]; then
-                return "$python_status"
-              fi
-
-              python_status=0
-              db_id=$(python3 -c "import json, pathlib, sys; data=json.loads(pathlib.Path(sys.argv[1]).read_text()); result=data.get('result') or {}; print(result.get('uuid', '') if isinstance(result, dict) else '')" \
-                "$create_target") || python_status=$?
-              if [ "$python_status" -ne 0 ]; then
-                return "$python_status"
-              fi
-
-              if [ -z "$db_id" ]; then
-                echo "Failed to determine ID for database '${db_name}'." >&2
-                printf -v "$__resultvar" ''
-                return 3
-              fi
-
-              echo "✔ Created Cloudflare D1 database '${db_name}'."
-            else
-              echo "✔ Cloudflare D1 database '${db_name}' already exists."
-            fi
-
-            printf -v "$__resultvar" '%s' "$db_id"
-            return 0
-          }
-
-          if fetch_database_id PROD_DB_ID "${D1_DATABASE_NAME}" "$tmpdir/prod-db.json"; then :
-          else
-            status=$?
-            if [ "$status" -eq 2 ]; then
-              echo "Error: Cloudflare API token lacks D1 database permissions (failed listing '${D1_DATABASE_NAME}'). Update the token to include the Account.D1 Databases scope." >&2
-            elif [ "$status" -eq 3 ]; then
-              echo "Error: Cloudflare D1 API did not return a database ID for '${D1_DATABASE_NAME}' after creation." >&2
-            else
-              echo "Error: Unable to ensure Cloudflare D1 database '${D1_DATABASE_NAME}' (status: ${status})." >&2
-            fi
-            exit "$status"
-          fi
-
-          if fetch_database_id PREVIEW_DB_ID "${D1_PREVIEW_DATABASE_NAME}" "$tmpdir/preview-db.json"; then :
-          else
-            status=$?
-            if [ "$status" -eq 2 ]; then
-              echo "Error: Cloudflare API token lacks D1 database permissions (failed listing '${D1_PREVIEW_DATABASE_NAME}'). Update the token to include the Account.D1 Databases scope." >&2
-            elif [ "$status" -eq 3 ]; then
-              echo "Error: Cloudflare D1 API did not return a database ID for '${D1_PREVIEW_DATABASE_NAME}' after creation." >&2
-            else
-              echo "Error: Unable to ensure Cloudflare D1 database '${D1_PREVIEW_DATABASE_NAME}' (status: ${status})." >&2
-            fi
-            exit "$status"
-          fi
-
-          curl -sS -X GET "${PROJECTS_ENDPOINT}/${PROJECT_NAME}" \
-            -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
-            -H "Content-Type: application/json" > "$tmpdir/project.json"
-
-          python3 - "$tmpdir/project.json" "$tmpdir/payload.json" "$PROD_DB_ID" "$PREVIEW_DB_ID" <<'PY'
-            import json, pathlib, sys
-
-            project_path, payload_path, prod_id, preview_id = sys.argv[1:5]
-
-            data = json.loads(pathlib.Path(project_path).read_text())
-            if not data.get("success", True):
-                print(json.dumps(data), file=sys.stderr)
-                sys.exit(1)
-
-            project = data.get("result") or {}
-            configs = project.get("deployment_configs") or {}
-            production = dict(configs.get("production") or {})
-            preview = dict(configs.get("preview") or {})
-
-            production["d1_databases"] = [{"binding": "DB", "database_id": prod_id}]
-            preview["d1_databases"] = [{"binding": "DB", "database_id": preview_id}]
-
-            configs["production"] = production
-            configs["preview"] = preview
-
-            pathlib.Path(payload_path).write_text(json.dumps({"deployment_configs": configs}))
-          PY
-
-          curl -sS -X PATCH "${PROJECTS_ENDPOINT}/${PROJECT_NAME}" \
-            -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
-            -H "Content-Type: application/json" \
-            --data @"$tmpdir/payload.json" > "$tmpdir/update-response.json"
-
-          python3 -c "import json, pathlib, sys; data=json.loads(pathlib.Path(sys.argv[1]).read_text()); (print(json.dumps(data), file=sys.stderr), sys.exit(1)) if not data.get('success') else None" \
-            "$tmpdir/update-response.json"
-
-          echo "prod_db_id=${PROD_DB_ID}" >> "$GITHUB_OUTPUT"
-          echo "preview_db_id=${PREVIEW_DB_ID}" >> "$GITHUB_OUTPUT"
+          echo "Validating Cloudflare D1 database bindings defined in wrangler.toml..."
+          pnpm exec wrangler d1 info streamlings-db >/dev/null
+          pnpm exec wrangler d1 info streamlings-db-preview >/dev/null
 
       - name: Deploy to Cloudflare Pages (preview)
         if: steps.cf-creds.outputs.present == 'true'

@@ -5,13 +5,16 @@ compatibility_date = "2024-10-23"
 # Pages-specific configuration
 pages_build_output_dir = ".svelte-kit/cloudflare"
 
-# D1 Database bindings
-# After creating D1 databases with wrangler, add their IDs here:
-# [[d1_databases]]
-# binding = "DB"
-# database_name = "streamlings-db"
-# database_id = "your-database-id-here"
-# preview_database_id = "your-preview-database-id-here"
+[[d1_databases]]
+binding = "DB"
+database_name = "streamlings-db"
+database_id = "c52bc2ae-6ee3-4478-89fc-cfd991a31370"
+
+[env.preview]
+[[env.preview.d1_databases]]
+binding = "DB"
+database_name = "streamlings-db-preview"
+database_id = "f8693fb2-e25e-4185-9a93-afc0bde22d05"
 
 # Environment variables are configured in Cloudflare dashboard or via GitHub secrets
 # Required environment variables:
