@@ -1,0 +1,23 @@
+# Cloudflare Pages configuration for Streamlings Web App
+name = "streamlings-web"
+compatibility_date = "2024-10-23"
+
+# Pages-specific configuration
+pages_build_output_dir = ".svelte-kit/cloudflare"
+
+# D1 Database bindings
+# After creating D1 databases with wrangler, add their IDs here:
+# [[d1_databases]]
+# binding = "DB"
+# database_name = "streamlings-db"
+# database_id = "your-database-id-here"
+# preview_database_id = "your-preview-database-id-here"
+
+# Environment variables are configured in Cloudflare dashboard or via GitHub secrets
+# Required environment variables:
+# - PUBLIC_CLERK_PUBLISHABLE_KEY (public)
+# - CLERK_SECRET_KEY (secret)
+# - DATABASE_URL (automatically bound from D1 in production)
+
+# Note: For local development, use .env file with DATABASE_URL=file:local.db
+# For production, D1 database will be automatically bound

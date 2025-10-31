@@ -1,0 +1,85 @@
+name: Deploy Web App
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/web/**"
+      - "packages/shared/**"
+      - "pnpm-lock.yaml"
+      - "package.json"
+      - "pnpm-workspace.yaml"
+      - ".github/workflows/deploy-web.yml"
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck web app
+        run: pnpm --filter web check
+
+      - name: Run web app tests
+        run: pnpm --filter web test:unit -- --run
+
+      - name: Build web app
+        working-directory: apps/web
+        run: pnpm build
+
+      - name: Deploy to Cloudflare Pages (Preview)
+        id: deploy-preview
+        working-directory: apps/web
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          OUTPUT=$(pnpm wrangler pages deploy .svelte-kit/cloudflare --project-name=streamlings-web --branch=preview 2>&1)
+          echo "$OUTPUT"
+          URL=$(echo "$OUTPUT" | grep -oP 'https://[^ ]*\.pages\.dev' | head -1)
+          echo "preview_url=$URL" >> $GITHUB_OUTPUT
+
+      - name: Smoke test preview deployment
+        run: |
+          echo "Testing web app at ${{ steps.deploy-preview.outputs.preview_url }}"
+          STATUS=$(curl -o /dev/null -s -w "%{http_code}" "${{ steps.deploy-preview.outputs.preview_url }}")
+          if [ "$STATUS" != "200" ]; then
+            echo "Preview deployment health check failed with status: $STATUS"
+            exit 1
+          fi
+          echo "Preview deployment successful!"
+
+      - name: Deploy to Cloudflare Pages (Production)
+        id: deploy-prod
+        working-directory: apps/web
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          OUTPUT=$(pnpm wrangler pages deploy .svelte-kit/cloudflare --project-name=streamlings-web --branch=main 2>&1)
+          echo "$OUTPUT"
+          URL=$(echo "$OUTPUT" | grep -oP 'https://[^ ]*\.pages\.dev' | head -1)
+          echo "prod_url=$URL" >> $GITHUB_OUTPUT
+
+      - name: Smoke test production deployment
+        run: |
+          echo "Testing production at ${{ steps.deploy-prod.outputs.prod_url }}"
+          STATUS=$(curl -o /dev/null -s -w "%{http_code}" "${{ steps.deploy-prod.outputs.prod_url }}")
+          if [ "$STATUS" != "200" ]; then
+            echo "Production deployment health check failed with status: $STATUS"
+            exit 1
+          fi
+          echo "Production deployment successful!"
+          echo "🚀 Web app deployed to: ${{ steps.deploy-prod.outputs.prod_url }}"
