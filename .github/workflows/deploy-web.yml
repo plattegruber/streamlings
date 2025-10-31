@@ -11,20 +11,42 @@ on:
       - "pnpm-workspace.yaml"
       - ".github/workflows/deploy-web.yml"
 
+concurrency:
+  group: deploy-web-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  deployments: write
+  id-token: write
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    env:
+      PNPM_VERSION: '9'
+      NODE_VERSION: '20'
+      PROJECT_NAME: streamlings-web
+      PRODUCTION_BRANCH: main
+      PREVIEW_BRANCH: gha-preview-${{ github.run_id }}
+      D1_DATABASE_NAME: streamlings-db
+      D1_PREVIEW_DATABASE_NAME: streamlings-db-preview
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
     steps:
       - uses: actions/checkout@v4
 
-      - uses: pnpm/action-setup@v4
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
         with:
-          version: 9
+          version: ${{ env.PNPM_VERSION }}
 
-      - uses: actions/setup-node@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          node-version: "20"
-          cache: "pnpm"
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -36,87 +58,264 @@ jobs:
       - name: Typecheck web app
         run: pnpm --filter web check
 
-      - name: Run web app tests
+      - name: Run web app unit tests
         run: pnpm --filter web test:unit -- --run
 
       - name: Build web app
         working-directory: apps/web
         run: pnpm build
 
-      - name: Create Cloudflare Pages project if needed
-        working-directory: apps/web
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      - name: Detect Cloudflare credentials
+        id: cf-creds
         run: |
-          # Try to create the project, ignore error if it already exists
-          pnpm exec wrangler pages project create streamlings-web --production-branch=main || echo "Project may already exist"
+          if [ -n "${CLOUDFLARE_API_TOKEN}" ] && [ -n "${CLOUDFLARE_ACCOUNT_ID}" ]; then
+            echo "Cloudflare credentials detected."
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Cloudflare credentials not found; deployment steps will be skipped."
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          fi
 
-      - name: Deploy to Cloudflare Pages (Preview)
+      - name: Ensure Cloudflare resources
+        if: steps.cf-creds.outputs.present == 'true'
+        id: ensure-resources
+        working-directory: apps/web
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          API_BASE="https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}"
+          PROJECTS_ENDPOINT="${API_BASE}/pages/projects"
+          D1_ENDPOINT="${API_BASE}/d1/database"
+
+          tmpdir=$(mktemp -d)
+          trap 'rm -rf "$tmpdir"' EXIT
+
+          echo "Checking for existing Cloudflare Pages project '${PROJECT_NAME}'..."
+          curl -sS -X GET "$PROJECTS_ENDPOINT" \
+            -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+            -H "Content-Type: application/json" > "$tmpdir/projects.json"
+
+          if ! python - "$tmpdir/projects.json" "$PROJECT_NAME" <<'PY'; then
+import json, sys, pathlib
+
+data = json.loads(pathlib.Path(sys.argv[1]).read_text())
+name = sys.argv[2]
+
+for project in data.get("result", []):
+    if project.get("name") == name:
+        sys.exit(0)
+
+sys.exit(1)
+PY
+          then
+            echo "Cloudflare Pages project '${PROJECT_NAME}' not found. Creating it..."
+            pnpm exec wrangler pages project create "${PROJECT_NAME}" --production-branch "${PRODUCTION_BRANCH}"
+            curl -sS -X GET "$PROJECTS_ENDPOINT" \
+              -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+              -H "Content-Type: application/json" > "$tmpdir/projects.json"
+            echo "✔ Created Cloudflare Pages project '${PROJECT_NAME}'."
+          else
+            echo "✔ Cloudflare Pages project '${PROJECT_NAME}' already exists."
+          fi
+
+          fetch_database_id() {
+            local db_name="$1"
+            local create_target="$2"
+
+            curl -sS -X GET "$D1_ENDPOINT" \
+              -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+              -H "Content-Type: application/json" > "$tmpdir/databases.json"
+
+            local db_id
+            db_id=$(python - "$tmpdir/databases.json" "$db_name" <<'PY'
+import json, sys, pathlib
+
+data = json.loads(pathlib.Path(sys.argv[1]).read_text())
+name = sys.argv[2]
+
+for entry in data.get("result", []):
+    if entry.get("name") == name:
+        print(entry.get("uuid", ""))
+        break
+PY
+)
+
+            if [ -z "$db_id" ]; then
+              echo "Cloudflare D1 database '${db_name}' not found. Creating it..."
+              curl -sS -X POST "$D1_ENDPOINT" \
+                -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+                -H "Content-Type: application/json" \
+                --data "{\"name\":\"${db_name}\"}" > "$create_target"
+
+              python - "$create_target" <<'PY'
+import json, sys, pathlib
+
+data = json.loads(pathlib.Path(sys.argv[1]).read_text())
+if not data.get("success"):
+    print(json.dumps(data), file=sys.stderr)
+    sys.exit(1)
+PY
+
+              db_id=$(python - "$create_target" <<'PY'
+import json, sys, pathlib
+
+data = json.loads(pathlib.Path(sys.argv[1]).read_text())
+print(data.get("result", {}).get("uuid", ""))
+PY
+)
+
+              if [ -z "$db_id" ]; then
+                echo "Failed to determine ID for database '${db_name}'." >&2
+                exit 1
+              fi
+
+              echo "✔ Created Cloudflare D1 database '${db_name}'."
+            else
+              echo "✔ Cloudflare D1 database '${db_name}' already exists."
+            fi
+
+            echo "$db_id"
+          }
+
+          PROD_DB_ID=$(fetch_database_id "${D1_DATABASE_NAME}" "$tmpdir/prod-db.json")
+          PREVIEW_DB_ID=$(fetch_database_id "${D1_PREVIEW_DATABASE_NAME}" "$tmpdir/preview-db.json")
+
+          python - "$tmpdir/payload.json" "$PROD_DB_ID" "$PREVIEW_DB_ID" <<'PY'
+import json, sys, pathlib
+
+payload_path, prod_id, preview_id = sys.argv[1], sys.argv[2], sys.argv[3]
+
+payload = {
+    "deployment_configs": {
+        "production": {
+            "d1_databases": [
+                {"binding": "DB", "database_id": prod_id}
+            ]
+        },
+        "preview": {
+            "d1_databases": [
+                {"binding": "DB", "database_id": preview_id}
+            ]
+        }
+    }
+}
+
+pathlib.Path(payload_path).write_text(json.dumps(payload))
+PY
+
+          curl -sS -X PATCH "${PROJECTS_ENDPOINT}/${PROJECT_NAME}" \
+            -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+            -H "Content-Type: application/json" \
+            --data @"$tmpdir/payload.json" > "$tmpdir/update-response.json"
+
+          python - "$tmpdir/update-response.json" <<'PY'
+import json, sys, pathlib
+
+data = json.loads(pathlib.Path(sys.argv[1]).read_text())
+if not data.get("success"):
+    print(json.dumps(data), file=sys.stderr)
+    sys.exit(1)
+PY
+
+          echo "prod_db_id=${PROD_DB_ID}" >> "$GITHUB_OUTPUT"
+          echo "preview_db_id=${PREVIEW_DB_ID}" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy to Cloudflare Pages (preview)
+        if: steps.cf-creds.outputs.present == 'true'
         id: deploy-preview
         working-directory: apps/web
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        shell: bash
         run: |
-          set -o pipefail
-          OUTPUT=$(pnpm exec wrangler pages deploy .svelte-kit/cloudflare --project-name=streamlings-web --branch=preview 2>&1 | tee /dev/stderr)
-          URL=$(echo "$OUTPUT" | grep -oP 'https://[^ ]*\.pages\.dev' | head -1)
-          echo "preview_url=$URL" >> $GITHUB_OUTPUT
+          set -euo pipefail
+
+          LOG_FILE=$(mktemp)
+          trap 'rm -f "$LOG_FILE"' EXIT
+
+          pnpm exec wrangler pages deploy .svelte-kit/cloudflare \
+            --project-name "${PROJECT_NAME}" \
+            --branch "${PREVIEW_BRANCH}" 2>&1 | tee "$LOG_FILE"
+
+          PREVIEW_URL=$(grep -oE 'https://[a-zA-Z0-9.-]+\.pages\.dev' "$LOG_FILE" | head -1 || true)
+
+          if [ -z "$PREVIEW_URL" ]; then
+            echo "Unable to parse preview deployment URL from wrangler output." >&2
+            exit 1
+          fi
+
+          echo "preview_url=${PREVIEW_URL}" >> "$GITHUB_OUTPUT"
+          echo "Preview deployment available at ${PREVIEW_URL}"
 
       - name: Smoke test preview deployment
+        if: steps.deploy-preview.outputs.preview_url != ''
+        shell: bash
         run: |
-          echo "Testing web app at ${{ steps.deploy-preview.outputs.preview_url }}"
-          echo "Waiting for deployment to be fully available..."
+          set -euo pipefail
 
-          # Retry up to 10 times with 6 second delays (1 minute total)
-          for i in {1..10}; do
-            echo "Attempt $i/10..."
-            STATUS=$(curl -o /dev/null -s -w "%{http_code}" "${{ steps.deploy-preview.outputs.preview_url }}" || echo "000")
+          echo "Testing preview deployment at ${PREVIEW_URL:=${{ steps.deploy-preview.outputs.preview_url }}}"
+          for attempt in {1..10}; do
+            STATUS=$(curl -o /dev/null -s -w "%{http_code}" "${PREVIEW_URL}" || echo "000")
 
             if [ "$STATUS" = "200" ]; then
-              echo "✅ Preview deployment successful!"
+              echo "✔ Preview deployment healthy."
               exit 0
             fi
 
-            echo "Status: $STATUS - waiting 6 seconds before retry..."
+            echo "Attempt ${attempt}/10 failed (status: ${STATUS}); retrying in 6 seconds..."
             sleep 6
           done
 
-          echo "❌ Preview deployment health check failed after 10 attempts"
+          echo "Preview deployment did not become healthy in time." >&2
           exit 1
 
-      - name: Deploy to Cloudflare Pages (Production)
+      - name: Deploy to Cloudflare Pages (production)
+        if: steps.cf-creds.outputs.present == 'true'
         id: deploy-prod
         working-directory: apps/web
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        shell: bash
         run: |
-          set -o pipefail
-          OUTPUT=$(pnpm exec wrangler pages deploy .svelte-kit/cloudflare --project-name=streamlings-web --branch=main 2>&1 | tee /dev/stderr)
-          URL=$(echo "$OUTPUT" | grep -oP 'https://[^ ]*\.pages\.dev' | head -1)
-          echo "prod_url=$URL" >> $GITHUB_OUTPUT
+          set -euo pipefail
+
+          LOG_FILE=$(mktemp)
+          trap 'rm -f "$LOG_FILE"' EXIT
+
+          pnpm exec wrangler pages deploy .svelte-kit/cloudflare \
+            --project-name "${PROJECT_NAME}" \
+            --branch "${PRODUCTION_BRANCH}" 2>&1 | tee "$LOG_FILE"
+
+          PROD_URL=$(grep -oE 'https://[a-zA-Z0-9.-]+\.pages\.dev' "$LOG_FILE" | head -1 || true)
+
+          if [ -z "$PROD_URL" ]; then
+            echo "Unable to parse production deployment URL from wrangler output." >&2
+            exit 1
+          fi
+
+          echo "prod_url=${PROD_URL}" >> "$GITHUB_OUTPUT"
+          echo "Production deployment available at ${PROD_URL}"
 
       - name: Smoke test production deployment
+        if: steps.deploy-prod.outputs.prod_url != ''
+        shell: bash
         run: |
-          echo "Testing production at ${{ steps.deploy-prod.outputs.prod_url }}"
-          echo "Waiting for deployment to be fully available..."
+          set -euo pipefail
 
-          # Retry up to 10 times with 6 second delays (1 minute total)
-          for i in {1..10}; do
-            echo "Attempt $i/10..."
-            STATUS=$(curl -o /dev/null -s -w "%{http_code}" "${{ steps.deploy-prod.outputs.prod_url }}" || echo "000")
+          echo "Testing production deployment at ${PROD_URL:=${{ steps.deploy-prod.outputs.prod_url }}}"
+          for attempt in {1..10}; do
+            STATUS=$(curl -o /dev/null -s -w "%{http_code}" "${PROD_URL}" || echo "000")
 
             if [ "$STATUS" = "200" ]; then
-              echo "✅ Production deployment successful!"
-              echo "🚀 Web app deployed to: ${{ steps.deploy-prod.outputs.prod_url }}"
+              echo "✔ Production deployment healthy."
+              echo "🚀 Web app deployed to ${PROD_URL}"
               exit 0
             fi
 
-            echo "Status: $STATUS - waiting 6 seconds before retry..."
+            echo "Attempt ${attempt}/10 failed (status: ${STATUS}); retrying in 6 seconds..."
             sleep 6
           done
 
-          echo "❌ Production deployment health check failed after 10 attempts"
+          echo "Production deployment did not become healthy in time." >&2
           exit 1
+
+      - name: Note skipped deployment
+        if: steps.cf-creds.outputs.present != 'true'
+        run: echo "Cloudflare credentials are missing; build and tests succeeded but no deployment was performed."
