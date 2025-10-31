@@ -96,19 +96,8 @@ jobs:
             -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
             -H "Content-Type: application/json" > "$tmpdir/projects.json"
 
-          if ! python - "$tmpdir/projects.json" "$PROJECT_NAME" <<'PY'; then
-import json, sys, pathlib
-
-data = json.loads(pathlib.Path(sys.argv[1]).read_text())
-name = sys.argv[2]
-
-for project in data.get("result", []):
-    if project.get("name") == name:
-        sys.exit(0)
-
-sys.exit(1)
-PY
-          then
+          if ! python3 -c "import json, pathlib, sys; data=json.loads(pathlib.Path(sys.argv[1]).read_text()); name=sys.argv[2]; sys.exit(0 if any(project.get('name') == name for project in data.get('result', [])) else 1)" \
+            "$tmpdir/projects.json" "$PROJECT_NAME"; then
             echo "Cloudflare Pages project '${PROJECT_NAME}' not found. Creating it..."
             pnpm exec wrangler pages project create "${PROJECT_NAME}" --production-branch "${PRODUCTION_BRANCH}"
             curl -sS -X GET "$PROJECTS_ENDPOINT" \
@@ -128,18 +117,8 @@ PY
               -H "Content-Type: application/json" > "$tmpdir/databases.json"
 
             local db_id
-            db_id=$(python - "$tmpdir/databases.json" "$db_name" <<'PY'
-import json, sys, pathlib
-
-data = json.loads(pathlib.Path(sys.argv[1]).read_text())
-name = sys.argv[2]
-
-for entry in data.get("result", []):
-    if entry.get("name") == name:
-        print(entry.get("uuid", ""))
-        break
-PY
-)
+            db_id=$(python3 -c "import json, pathlib, sys; data=json.loads(pathlib.Path(sys.argv[1]).read_text()); name=sys.argv[2]; print(next((entry.get('uuid', '') for entry in data.get('result', []) if entry.get('name') == name), '')))" \
+              "$tmpdir/databases.json" "$db_name")
 
             if [ -z "$db_id" ]; then
               echo "Cloudflare D1 database '${db_name}' not found. Creating it..."
@@ -148,22 +127,11 @@ PY
                 -H "Content-Type: application/json" \
                 --data "{\"name\":\"${db_name}\"}" > "$create_target"
 
-              python - "$create_target" <<'PY'
-import json, sys, pathlib
+              python3 -c "import json, pathlib, sys; data=json.loads(pathlib.Path(sys.argv[1]).read_text()); if not data.get('success'): print(json.dumps(data), file=sys.stderr); sys.exit(1)" \
+                "$create_target"
 
-data = json.loads(pathlib.Path(sys.argv[1]).read_text())
-if not data.get("success"):
-    print(json.dumps(data), file=sys.stderr)
-    sys.exit(1)
-PY
-
-              db_id=$(python - "$create_target" <<'PY'
-import json, sys, pathlib
-
-data = json.loads(pathlib.Path(sys.argv[1]).read_text())
-print(data.get("result", {}).get("uuid", ""))
-PY
-)
+              db_id=$(python3 -c "import json, pathlib, sys; data=json.loads(pathlib.Path(sys.argv[1]).read_text()); print(data.get('result', {}).get('uuid', ''))" \
+                "$create_target")
 
               if [ -z "$db_id" ]; then
                 echo "Failed to determine ID for database '${db_name}'." >&2
@@ -181,42 +149,16 @@ PY
           PROD_DB_ID=$(fetch_database_id "${D1_DATABASE_NAME}" "$tmpdir/prod-db.json")
           PREVIEW_DB_ID=$(fetch_database_id "${D1_PREVIEW_DATABASE_NAME}" "$tmpdir/preview-db.json")
 
-          python - "$tmpdir/payload.json" "$PROD_DB_ID" "$PREVIEW_DB_ID" <<'PY'
-import json, sys, pathlib
-
-payload_path, prod_id, preview_id = sys.argv[1], sys.argv[2], sys.argv[3]
-
-payload = {
-    "deployment_configs": {
-        "production": {
-            "d1_databases": [
-                {"binding": "DB", "database_id": prod_id}
-            ]
-        },
-        "preview": {
-            "d1_databases": [
-                {"binding": "DB", "database_id": preview_id}
-            ]
-        }
-    }
-}
-
-pathlib.Path(payload_path).write_text(json.dumps(payload))
-PY
+          python3 -c "import json, pathlib, sys; payload_path=sys.argv[1]; prod_id=sys.argv[2]; preview_id=sys.argv[3]; payload={'deployment_configs': {'production': {'d1_databases': [{'binding': 'DB', 'database_id': prod_id}]}, 'preview': {'d1_databases': [{'binding': 'DB', 'database_id': preview_id}]}}}; pathlib.Path(payload_path).write_text(json.dumps(payload))" \
+            "$tmpdir/payload.json" "$PROD_DB_ID" "$PREVIEW_DB_ID"
 
           curl -sS -X PATCH "${PROJECTS_ENDPOINT}/${PROJECT_NAME}" \
             -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
             -H "Content-Type: application/json" \
             --data @"$tmpdir/payload.json" > "$tmpdir/update-response.json"
 
-          python - "$tmpdir/update-response.json" <<'PY'
-import json, sys, pathlib
-
-data = json.loads(pathlib.Path(sys.argv[1]).read_text())
-if not data.get("success"):
-    print(json.dumps(data), file=sys.stderr)
-    sys.exit(1)
-PY
+          python3 -c "import json, pathlib, sys; data=json.loads(pathlib.Path(sys.argv[1]).read_text()); if not data.get('success'): print(json.dumps(data), file=sys.stderr); sys.exit(1)" \
+            "$tmpdir/update-response.json"
 
           echo "prod_db_id=${PROD_DB_ID}" >> "$GITHUB_OUTPUT"
           echo "preview_db_id=${PREVIEW_DB_ID}" >> "$GITHUB_OUTPUT"
