@@ -108,9 +108,9 @@ jobs:
             echo "✔ Cloudflare Pages project '${PROJECT_NAME}' already exists."
           fi
 
-          D1_SUPPORT_AVAILABLE=true
-
           fetch_database_id() {
+            local __resultvar="$1"
+            shift
             local db_name="$1"
             local create_target="$2"
 
@@ -125,9 +125,8 @@ jobs:
 
             if [ "$python_status" -eq 2 ]; then
               echo "Warning: Cloudflare API returned an error while listing D1 databases for '${db_name}'. Skipping D1 setup." >&2
-              D1_SUPPORT_AVAILABLE=false
-              echo ""
-              return 0
+              printf -v "$__resultvar" ''
+              return 2
             elif [ "$python_status" -ne 0 ]; then
               return "$python_status"
             fi
@@ -145,9 +144,8 @@ jobs:
 
               if [ "$python_status" -eq 2 ]; then
                 echo "Warning: Cloudflare API returned an error while creating D1 database '${db_name}'. Skipping D1 setup." >&2
-                D1_SUPPORT_AVAILABLE=false
-                echo ""
-                return 0
+                printf -v "$__resultvar" ''
+                return 2
               elif [ "$python_status" -ne 0 ]; then
                 return "$python_status"
               fi
@@ -161,9 +159,8 @@ jobs:
 
               if [ -z "$db_id" ]; then
                 echo "Failed to determine ID for database '${db_name}'." >&2
-                D1_SUPPORT_AVAILABLE=false
-                echo ""
-                return 0
+                printf -v "$__resultvar" ''
+                return 3
               fi
 
               echo "✔ Created Cloudflare D1 database '${db_name}'."
@@ -171,25 +168,38 @@ jobs:
               echo "✔ Cloudflare D1 database '${db_name}' already exists."
             fi
 
-            echo "$db_id"
+            printf -v "$__resultvar" '%s' "$db_id"
+            return 0
           }
 
-          PROD_DB_ID=$(fetch_database_id "${D1_DATABASE_NAME}" "$tmpdir/prod-db.json")
+          if fetch_database_id PROD_DB_ID "${D1_DATABASE_NAME}" "$tmpdir/prod-db.json"; then
+            :
+          else
+            status=$?
+            if [ "$status" -eq 2 ] || [ "$status" -eq 3 ]; then
+              echo "Warning: Cloudflare D1 API not accessible with provided credentials; skipping D1 configuration updates."
+              echo "prod_db_id=" >> "$GITHUB_OUTPUT"
+              echo "preview_db_id=" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
 
-          if [ "$D1_SUPPORT_AVAILABLE" != true ]; then
-            echo "Warning: Cloudflare D1 API not accessible with provided credentials; skipping D1 configuration updates."
-            echo "prod_db_id=" >> "$GITHUB_OUTPUT"
-            echo "preview_db_id=" >> "$GITHUB_OUTPUT"
-            exit 0
+            echo "Error: Unable to ensure Cloudflare D1 database '${D1_DATABASE_NAME}' (status: ${status})." >&2
+            exit "$status"
           fi
 
-          PREVIEW_DB_ID=$(fetch_database_id "${D1_PREVIEW_DATABASE_NAME}" "$tmpdir/preview-db.json")
+          if fetch_database_id PREVIEW_DB_ID "${D1_PREVIEW_DATABASE_NAME}" "$tmpdir/preview-db.json"; then
+            :
+          else
+            status=$?
+            if [ "$status" -eq 2 ] || [ "$status" -eq 3 ]; then
+              echo "Warning: Cloudflare D1 API not accessible with provided credentials; skipping D1 configuration updates."
+              echo "prod_db_id=" >> "$GITHUB_OUTPUT"
+              echo "preview_db_id=" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
 
-          if [ "$D1_SUPPORT_AVAILABLE" != true ]; then
-            echo "Warning: Cloudflare D1 API not accessible with provided credentials; skipping D1 configuration updates."
-            echo "prod_db_id=" >> "$GITHUB_OUTPUT"
-            echo "preview_db_id=" >> "$GITHUB_OUTPUT"
-            exit 0
+            echo "Error: Unable to ensure Cloudflare D1 database '${D1_PREVIEW_DATABASE_NAME}' (status: ${status})." >&2
+            exit "$status"
           fi
 
           python3 -c "import json, pathlib, sys; payload_path=sys.argv[1]; prod_id=sys.argv[2]; preview_id=sys.argv[3]; payload={'deployment_configs': {'production': {'d1_databases': [{'binding': 'DB', 'database_id': prod_id}]}, 'preview': {'d1_databases': [{'binding': 'DB', 'database_id': preview_id}]}}}; pathlib.Path(payload_path).write_text(json.dumps(payload))" \
