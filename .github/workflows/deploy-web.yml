@@ -172,33 +172,29 @@ jobs:
             return 0
           }
 
-          if fetch_database_id PROD_DB_ID "${D1_DATABASE_NAME}" "$tmpdir/prod-db.json"; then
-            :
+          if fetch_database_id PROD_DB_ID "${D1_DATABASE_NAME}" "$tmpdir/prod-db.json"; then :
           else
             status=$?
-            if [ "$status" -eq 2 ] || [ "$status" -eq 3 ]; then
-              echo "Warning: Cloudflare D1 API not accessible with provided credentials; skipping D1 configuration updates."
-              echo "prod_db_id=" >> "$GITHUB_OUTPUT"
-              echo "preview_db_id=" >> "$GITHUB_OUTPUT"
-              exit 0
+            if [ "$status" -eq 2 ]; then
+              echo "Error: Cloudflare API token lacks D1 database permissions (failed listing '${D1_DATABASE_NAME}'). Update the token to include the Account.D1 Databases scope." >&2
+            elif [ "$status" -eq 3 ]; then
+              echo "Error: Cloudflare D1 API did not return a database ID for '${D1_DATABASE_NAME}' after creation." >&2
+            else
+              echo "Error: Unable to ensure Cloudflare D1 database '${D1_DATABASE_NAME}' (status: ${status})." >&2
             fi
-
-            echo "Error: Unable to ensure Cloudflare D1 database '${D1_DATABASE_NAME}' (status: ${status})." >&2
             exit "$status"
           fi
 
-          if fetch_database_id PREVIEW_DB_ID "${D1_PREVIEW_DATABASE_NAME}" "$tmpdir/preview-db.json"; then
-            :
+          if fetch_database_id PREVIEW_DB_ID "${D1_PREVIEW_DATABASE_NAME}" "$tmpdir/preview-db.json"; then :
           else
             status=$?
-            if [ "$status" -eq 2 ] || [ "$status" -eq 3 ]; then
-              echo "Warning: Cloudflare D1 API not accessible with provided credentials; skipping D1 configuration updates."
-              echo "prod_db_id=" >> "$GITHUB_OUTPUT"
-              echo "preview_db_id=" >> "$GITHUB_OUTPUT"
-              exit 0
+            if [ "$status" -eq 2 ]; then
+              echo "Error: Cloudflare API token lacks D1 database permissions (failed listing '${D1_PREVIEW_DATABASE_NAME}'). Update the token to include the Account.D1 Databases scope." >&2
+            elif [ "$status" -eq 3 ]; then
+              echo "Error: Cloudflare D1 API did not return a database ID for '${D1_PREVIEW_DATABASE_NAME}' after creation." >&2
+            else
+              echo "Error: Unable to ensure Cloudflare D1 database '${D1_PREVIEW_DATABASE_NAME}' (status: ${status})." >&2
             fi
-
-            echo "Error: Unable to ensure Cloudflare D1 database '${D1_PREVIEW_DATABASE_NAME}' (status: ${status})." >&2
             exit "$status"
           fi
 
