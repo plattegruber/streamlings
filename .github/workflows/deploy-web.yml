@@ -30,6 +30,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Install Playwright browsers
+        working-directory: apps/web
         run: pnpm exec playwright install --with-deps chromium
 
       - name: Typecheck web app
