@@ -5,10 +5,18 @@
 declare global {
 	namespace App {
 		// interface Error {}
-		// interface Locals {}
+		interface Locals {
+			db?:
+				| import('drizzle-orm/d1').DrizzleD1Database<typeof import('$lib/server/db/schema')>
+				| import('drizzle-orm/libsql').LibSQLDatabase<typeof import('$lib/server/db/schema')>;
+		}
 		// interface PageData {}
 		// interface PageState {}
-		// interface Platform {}
+		interface Platform {
+			env?: {
+				DB: unknown;
+			};
+		}
 	}
 }
 
