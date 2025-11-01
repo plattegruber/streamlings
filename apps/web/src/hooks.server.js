@@ -1,10 +1,11 @@
 import { withClerkHandler } from 'svelte-clerk/server';
-import { redirect, type Handle } from '@sveltejs/kit';
+import { redirect } from '@sveltejs/kit';
 import { sequence } from '@sveltejs/kit/hooks';
 import { resolveDatabase } from '$lib/server/db';
 import { env as privateEnv } from '$env/dynamic/private';
 
-const clerkHandler: Handle = async ({ event, resolve }) => {
+/** @type {import('@sveltejs/kit').Handle} */
+const clerkHandler = async ({ event, resolve }) => {
 	const publishableKey =
 		event.platform?.env?.CLERK_PUBLISHABLE_KEY ?? privateEnv.CLERK_PUBLISHABLE_KEY;
 	const secretKey = event.platform?.env?.CLERK_SECRET_KEY ?? privateEnv.CLERK_SECRET_KEY;
