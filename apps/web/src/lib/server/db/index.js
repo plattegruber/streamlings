@@ -4,7 +4,9 @@ import { createClient } from '@libsql/client';
 import * as schema from './schema';
 import { env } from '$env/dynamic/private';
 
+/** @type {import('@libsql/client').Client | undefined} */
 let libsqlClient;
+/** @type {import('drizzle-orm/libsql').LibSQLDatabase<typeof schema> | undefined} */
 let libsqlDb;
 
 /**
@@ -24,11 +26,10 @@ export const getLibsqlDatabase = () => {
 		throw new Error('DATABASE_URL is not set');
 	}
 
-	const clientConfig = { url: env.DATABASE_URL };
-
-	if (env.DATABASE_AUTH_TOKEN) {
-		clientConfig.authToken = env.DATABASE_AUTH_TOKEN;
-	}
+	const clientConfig = {
+		url: env.DATABASE_URL,
+		authToken: env.DATABASE_AUTH_TOKEN
+	};
 
 	libsqlClient = libsqlClient ?? createClient(clientConfig);
 	libsqlDb = drizzleLibSQL(libsqlClient, { schema });
@@ -39,6 +40,9 @@ export const getLibsqlDatabase = () => {
 /**
  * Resolve the appropriate database instance for a given SvelteKit request.
  * Prefers the Cloudflare D1 binding when available, otherwise falls back to libSQL.
+ */
+/**
+ * @param {import('@sveltejs/kit').RequestEvent | undefined} event
  */
 export const resolveDatabase = (event) => {
 	if (event?.platform?.env?.DB) {
