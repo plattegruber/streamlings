@@ -3,8 +3,9 @@ import { env as privateEnv } from '$env/dynamic/private';
 
 let loggedMissingKeyWarning = false;
 
-export const load = ({ locals }) => {
-	const publishableKey = privateEnv.CLERK_PUBLISHABLE_KEY ?? '';
+export const load = ({ locals, platform }) => {
+	const publishableKey =
+		platform?.env?.CLERK_PUBLISHABLE_KEY ?? privateEnv.CLERK_PUBLISHABLE_KEY ?? '';
 
 	if (!publishableKey && !loggedMissingKeyWarning) {
 		console.warn(
