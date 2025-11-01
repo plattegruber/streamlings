@@ -2,8 +2,26 @@ import { withClerkHandler } from 'svelte-clerk/server';
 import { redirect } from '@sveltejs/kit';
 import { sequence } from '@sveltejs/kit/hooks';
 import { resolveDatabase } from '$lib/server/db';
+import { env as privateEnv } from '$env/dynamic/private';
 
-const clerkHandler = withClerkHandler();
+const clerkHandler = async ({ event, resolve }) => {
+	const publishableKey =
+		event.platform?.env?.CLERK_PUBLISHABLE_KEY ?? privateEnv.CLERK_PUBLISHABLE_KEY;
+	const secretKey = event.platform?.env?.CLERK_SECRET_KEY ?? privateEnv.CLERK_SECRET_KEY;
+
+	if (!publishableKey) {
+		console.error(
+			'[streamlings] Clerk publishable key missing in request environment; authentication will fail.'
+		);
+	}
+
+	const handler = withClerkHandler({
+		publishableKey,
+		secretKey
+	});
+
+	return handler({ event, resolve });
+};
 
 let loggedDatabaseWarning = false;
 
