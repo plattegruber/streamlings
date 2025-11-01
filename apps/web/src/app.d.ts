@@ -15,6 +15,8 @@ declare global {
 		interface Platform {
 			env?: {
 				DB: unknown;
+				CLERK_PUBLISHABLE_KEY?: string;
+				CLERK_SECRET_KEY?: string;
 			};
 		}
 	}
