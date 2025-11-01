@@ -18,9 +18,9 @@ database_id = "f8693fb2-e25e-4185-9a93-afc0bde22d05"
 
 # Environment variables are configured in Cloudflare dashboard or via GitHub secrets
 # Required environment variables:
-# - PUBLIC_CLERK_PUBLISHABLE_KEY (public)
+# - CLERK_PUBLISHABLE_KEY (secret; exposed to clients by the app)
 # - CLERK_SECRET_KEY (secret)
-# - DATABASE_URL (automatically bound from D1 in production)
+# - DATABASE_URL (optional; only needed locally when no D1 binding is available)
 
 # Note: For local development, use .env file with DATABASE_URL=file:local.db
 # For production, D1 database will be automatically bound

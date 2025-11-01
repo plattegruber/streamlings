@@ -94,7 +94,7 @@ The app automatically deploys to Cloudflare Pages when changes are pushed to the
    - Add the following variables:
 
 **Production & Preview:**
-- `PUBLIC_CLERK_PUBLISHABLE_KEY`: Your Clerk publishable key
+- `CLERK_PUBLISHABLE_KEY`: Your Clerk publishable key
 - `CLERK_SECRET_KEY`: Your Clerk secret key (encrypted)
 - `DATABASE_URL`: Will be automatically bound from D1 (no manual config needed)
 
@@ -114,5 +114,5 @@ cp .env.example .env
 
 Required variables:
 - `DATABASE_URL`: Database connection string (local: `file:local.db`)
-- `PUBLIC_CLERK_PUBLISHABLE_KEY`: Clerk publishable key
+- `CLERK_PUBLISHABLE_KEY`: Clerk publishable key
 - `CLERK_SECRET_KEY`: Clerk secret key
