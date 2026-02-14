@@ -201,6 +201,13 @@ Events will flow: Twitch CLI → adapter (:8788) → streamling-state (:8787)
 
 Database schema is defined in `apps/web/src/lib/server/db/schema.js` using Drizzle ORM. The database client is initialized in `apps/web/src/lib/server/db/index.js` and pulls `DATABASE_URL` from SvelteKit's private environment.
 
+### Tables
+
+- **user**: Legacy table with `id` (UUID, PK) and `age` (integer, optional)
+- **streamer**: Streamer profiles — `id` (UUID, PK), `display_name` (required), `avatar_url` (optional), `created_at` (timestamp)
+- **platform_connection**: Links streamers to platform accounts — `id` (UUID, PK), `streamer_id` (FK → streamer), `platform` (e.g. `'twitch'`), `platform_user_id`, `platform_username`, OAuth tokens (`access_token`, `refresh_token`, `token_expires_at`), `connected_at` (timestamp). A streamer can have multiple platform connections.
+- **streamling**: One per streamer, holds the Durable Object identifier for routing — `id` (UUID, PK), `streamer_id` (FK → streamer, unique), `durable_object_id`, `created_at` (timestamp)
+
 ## Testing Tools
 
 - **Twitch CLI**: Installed for emulating EventSub webhooks locally
