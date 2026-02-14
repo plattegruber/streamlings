@@ -1,0 +1,14 @@
+{
+  "subscription": {
+    "type": "stream.offline",
+    "version": "1",
+    "condition": {
+      "broadcaster_user_id": "12345"
+    }
+  },
+  "event": {
+    "broadcaster_user_id": "12345",
+    "broadcaster_user_login": "teststreamer",
+    "broadcaster_user_name": "TestStreamer"
+  }
+}
