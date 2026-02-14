@@ -114,8 +114,6 @@ describe('Streamlings Worker', () => {
 	});
 
 	describe('WebSocket /ws endpoint', () => {
-		const hasWebSocket = typeof globalThis.WebSocket !== 'undefined';
-
 		it('should return 426 for non-upgrade requests to /ws', async () => {
 			const resp = await worker.fetch('http://localhost:8787/ws', {
 				method: 'GET',
@@ -123,7 +121,7 @@ describe('Streamlings Worker', () => {
 			expect(resp.status).toBe(426);
 		});
 
-		it.runIf(hasWebSocket)('should accept WebSocket upgrade and receive telemetry', async () => {
+		it('should accept WebSocket upgrade and receive telemetry', async () => {
 			const ws = new WebSocket(`ws://${worker.address}:${worker.port}/ws`);
 
 			try {
@@ -153,7 +151,7 @@ describe('Streamlings Worker', () => {
 			}
 		}, 45_000);
 
-		it.runIf(hasWebSocket)('should support multiple concurrent WebSocket connections', async () => {
+		it('should support multiple concurrent WebSocket connections', async () => {
 			const ws1 = new WebSocket(`ws://${worker.address}:${worker.port}/ws`);
 			const ws2 = new WebSocket(`ws://${worker.address}:${worker.port}/ws`);
 

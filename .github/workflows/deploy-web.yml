@@ -25,7 +25,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       PNPM_VERSION: '9'
-      NODE_VERSION: '20'
+      NODE_VERSION: '22'
       PROJECT_NAME: streamlings-web
       PRODUCTION_BRANCH: main
       PREVIEW_BRANCH: gha-preview-${{ github.run_id }}
