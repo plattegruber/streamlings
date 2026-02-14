@@ -4,6 +4,15 @@ Technical opinions and conventions for working in the Streamlings codebase. Thes
 
 ## Architecture Opinions
 
+### Local-Easy, Deploy-Easy
+
+Every feature must work on a dev machine with minimal setup. If a developer can't `pnpm dev` and see the feature working locally, the feature isn't done. Concretely:
+
+- **No external dependencies for local dev.** Workers run locally via Wrangler. The database is a local SQLite file. Auth can be stubbed. If a feature requires a live Twitch connection to test, it also needs a simulation script that exercises the same code path locally.
+- **`pnpm dev` starts everything.** A new developer should clone, `pnpm install`, `pnpm dev`, and have a working system. If your feature breaks this, fix it before merging.
+- **Deploy is a push to main.** CI handles preview → smoke test → production promotion. If your feature needs manual deployment steps, infrastructure changes, or secret rotation, document it explicitly and keep it to a minimum.
+- **Features are vertical slices.** A feature isn't done when the code works. It's done when it has tests, works locally, deploys cleanly, and any relevant docs (CLAUDE.md, README, inline comments) are updated. One PR, one complete slice.
+
 ### Durable Objects Are the Source of Truth
 
 All Streamling state lives in the Durable Object. The D1 database in the web app is for user/account data, not for Streamling runtime state. Don't duplicate state between the two — the web app should read Streamling state by calling the worker's `/telemetry` endpoint, not by maintaining a parallel copy.
@@ -65,6 +74,15 @@ We deploy on Cloudflare. Workers and Durable Objects are the compute model. Don'
 
 ## Adding New Features
 
+Every feature is a vertical slice. The PR should include the implementation, its tests, local dev support, deployment readiness, and any doc updates. Use this checklist as a gut check before opening a PR:
+
+- [ ] Does `pnpm dev` still work? Can I see/exercise this feature locally?
+- [ ] Are there tests? (Unit for logic, integration for worker endpoints, component tests for UI)
+- [ ] If this changes an API or config shape, are shared types updated?
+- [ ] If this adds a new endpoint or script, is it documented in the relevant README or CLAUDE.md?
+- [ ] Does CI pass? (Tests, typecheck, lint)
+- [ ] If this needs new env vars or secrets, is `.env.example` updated and the setup documented?
+
 ### Adding a New Platform Adapter
 
 1. Create a new app in `apps/` (e.g., `apps/youtube-adapter`)
@@ -73,7 +91,9 @@ We deploy on Cloudflare. Workers and Durable Objects are the compute model. Don'
 4. Map the event to one of the existing activity categories (message, high-value) or propose a new category in the shared types
 5. Forward to `streamling-state` via its `/webhook` endpoint
 6. Add wrangler.toml with `STREAMLING_STATE_URL` binding
-7. Add the adapter to the CI deploy pipeline
+7. Add a test script that exercises the adapter locally without a live platform connection
+8. Add the adapter to the CI deploy pipeline
+9. Update CLAUDE.md architecture section and the root README
 
 ### Adding a New Mood State
 
@@ -83,6 +103,7 @@ We deploy on Cloudflare. Workers and Durable Objects are the compute model. Don'
 4. Update `getNextState` to include the new state in the transition graph
 5. Add tests for every new transition path
 6. Update default config values with tuned thresholds
+7. Verify the simulation script can trigger the new state locally
 
 ### Adding a New Event Type
 
@@ -90,7 +111,8 @@ We deploy on Cloudflare. Workers and Durable Objects are the compute model. Don'
 2. If it's a new category (not message or high-value), add a new weight to `EnergyConfig` and update `calculateRawActivity`
 3. Update the shared types if the event payload shape needs to be typed
 4. Add the event type to the adapter that produces it
-5. Test with `pnpm test:event` or a custom script
+5. Add a test payload script so the event can be triggered locally
+6. Test with `pnpm test:event` or a custom script
 
 ## Performance Considerations
 
