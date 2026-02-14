@@ -58,17 +58,14 @@ jobs:
         if: steps.trivial.outputs.skip != 'true'
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
         run: |
-          GUIDELINES=$(cat .claude/review-guidelines.md 2>/dev/null || echo "No review guidelines found.")
-          FALSE_POSITIVES=$(cat .claude/false-positives.md 2>/dev/null || echo "No false positives recorded.")
-          DIFF=$(cat /tmp/pr-diff.txt)
-          PR_TITLE="${{ github.event.pull_request.title }}"
-          PR_BODY=$(cat <<'PRBODYEOF'
-          ${{ github.event.pull_request.body }}
-          PRBODYEOF
-          )
-
-          claude -p "$(cat <<'PROMPTEOF'
+          # Build prompt file safely: quoted heredoc for static text,
+          # printf for variables (no shell expansion on untrusted content),
+          # cat for file content.
+          {
+            cat <<'EOF'
           You are a code reviewer for the Streamlings project. Review the PR diff below and return ONLY valid JSON (no markdown fences, no commentary) with this shape:
 
           {"summary": "string", "issues": [{"file": "string", "line": number, "severity": "bug|security|design", "message": "string"}]}
@@ -82,19 +79,18 @@ jobs:
           - The "line" field must reference a line number in the new version of the file (from the + side of the diff).
 
           ## PR Context
-          Title: ${PR_TITLE}
-          Body: ${PR_BODY}
+          EOF
+            printf 'Title: %s\n' "$PR_TITLE"
+            printf 'Body:\n%s\n' "$PR_BODY"
+            printf '\n## Review Guidelines\n'
+            cat .claude/review-guidelines.md 2>/dev/null || echo "No review guidelines found."
+            printf '\n## Known False Positives\n'
+            cat .claude/false-positives.md 2>/dev/null || echo "No false positives recorded."
+            printf '\n## Diff\n'
+            cat /tmp/pr-diff.txt
+          } > /tmp/review-prompt.txt
 
-          ## Review Guidelines
-          ${GUIDELINES}
-
-          ## Known False Positives
-          ${FALSE_POSITIVES}
-
-          ## Diff
-          ${DIFF}
-          PROMPTEOF
-          )" > review.json
+          claude -p "$(cat /tmp/review-prompt.txt)" > review.json
 
       - name: Post review comments
         if: steps.trivial.outputs.skip != 'true'
