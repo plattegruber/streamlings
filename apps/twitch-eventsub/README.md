@@ -12,6 +12,22 @@ This adapter worker:
 
 This allows StreamlingState to be platform-agnostic while supporting multiple streaming platforms.
 
+## Supported Event Types
+
+| EventSub Type | Category | User ID Field |
+|---|---|---|
+| `channel.chat.message` | Message | `event.user_id` |
+| `channel.follow` | Interaction | `event.user_id` |
+| `channel.subscribe` | High-value | `event.user_id` |
+| `channel.subscription.gift` | High-value | `event.to_broadcaster_user_id` |
+| `channel.subscription.message` | High-value | `event.user_id` |
+| `channel.cheer` | High-value | `event.user_id` |
+| `channel.raid` | High-value | `event.user_id` |
+| `stream.online` | Stream lifecycle | `event.broadcaster_user_id` |
+| `stream.offline` | Stream lifecycle | `event.broadcaster_user_id` |
+
+Stream lifecycle events (`stream.online`, `stream.offline`) use the broadcaster as the relevant user since there is no "acting" chat user.
+
 ## Local Development
 
 ### Prerequisites
@@ -52,6 +68,10 @@ pnpm test:verify
 
 # Send random events
 pnpm test:event
+
+# Send specific stream lifecycle events
+pnpm test:online
+pnpm test:offline
 ```
 
 You should see:

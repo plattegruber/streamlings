@@ -5,6 +5,8 @@
  * with mapped internal user IDs.
  */
 
+import { extractTwitchUserId } from './extract';
+
 export default {
 	async fetch(request, env, ctx): Promise<Response> {
 		const url = new URL(request.url);
@@ -30,12 +32,8 @@ export default {
 			if (body.subscription && body.subscription.type) {
 				const eventType = body.subscription.type;
 
-				// Extract Twitch user ID from event (if available)
-				// Different events have user info in different places
-				const twitchUserId = body.event?.user_id
-					|| body.event?.broadcaster_user_id
-					|| body.event?.to_broadcaster_user_id
-					|| 'default_user';
+				// Extract Twitch user ID from event
+				const twitchUserId = extractTwitchUserId(body.event);
 
 				// Map Twitch user ID to internal ID
 				// For now, simple prefix mapping - will be more sophisticated later
