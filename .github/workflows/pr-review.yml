@@ -1,0 +1,145 @@
+name: PR Review
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: pr-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Compute diff
+        id: diff
+        run: |
+          if [ "${{ github.event.action }}" = "synchronize" ] && [ -n "${{ github.event.before }}" ]; then
+            DIFF=$(git diff "${{ github.event.before }}"..HEAD)
+          else
+            DIFF=$(git diff origin/${{ github.base_ref }}...HEAD)
+          fi
+          # Store diff in a file to avoid shell escaping issues
+          echo "$DIFF" > /tmp/pr-diff.txt
+          LINES=$(echo "$DIFF" | wc -l)
+          echo "diff_lines=$LINES" >> "$GITHUB_OUTPUT"
+
+      - name: Check if trivial
+        id: trivial
+        run: |
+          DIFF_LINES=${{ steps.diff.outputs.diff_lines }}
+          if [ "$DIFF_LINES" -lt 20 ]; then
+            # Check if only docs/config files changed
+            CHANGED_FILES=$(git diff --name-only origin/${{ github.base_ref }}...HEAD)
+            NON_TRIVIAL=$(echo "$CHANGED_FILES" | grep -cvE '\.(md|yml|yaml|json|toml)$' || true)
+            if [ "$NON_TRIVIAL" -eq 0 ]; then
+              echo "skip=true" >> "$GITHUB_OUTPUT"
+              echo "Trivial change detected (< 20 lines, docs/config only). Skipping review."
+              exit 0
+            fi
+          fi
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+
+      - name: Install Claude Code
+        if: steps.trivial.outputs.skip != 'true'
+        run: npm install -g @anthropic-ai/claude-code
+
+      - name: Run review
+        if: steps.trivial.outputs.skip != 'true'
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          # Build prompt file safely: quoted heredoc for static text,
+          # printf for variables (no shell expansion on untrusted content),
+          # cat for file content.
+          {
+            cat <<'EOF'
+          You are a code reviewer for the Streamlings project. Review the PR diff below and return ONLY valid JSON (no markdown fences, no commentary) with this shape:
+
+          {"summary": "string", "issues": [{"file": "string", "line": number, "severity": "bug|security|design", "message": "string"}]}
+
+          Rules:
+          - Only flag bugs, security issues, and design problems that would block a merge.
+          - Do NOT flag style preferences, formatting, missing comments, or minor naming opinions.
+          - Respect the project conventions in the review guidelines below.
+          - Check the false positives list and do not repeat mistakes listed there.
+          - If there are no issues, return {"summary": "Looks good.", "issues": []}.
+          - The "line" field must reference a line number in the new version of the file (from the + side of the diff).
+
+          ## PR Context
+          EOF
+            printf 'Title: %s\n' "$PR_TITLE"
+            printf 'Body:\n%s\n' "$PR_BODY"
+            printf '\n## Review Guidelines\n'
+            cat .claude/review-guidelines.md 2>/dev/null || echo "No review guidelines found."
+            printf '\n## Known False Positives\n'
+            cat .claude/false-positives.md 2>/dev/null || echo "No false positives recorded."
+            printf '\n## Diff\n'
+            cat /tmp/pr-diff.txt
+          } > /tmp/review-prompt.txt
+
+          claude -p "$(cat /tmp/review-prompt.txt)" > review.json
+
+      - name: Post review comments
+        if: steps.trivial.outputs.skip != 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const raw = fs.readFileSync('review.json', 'utf8').trim();
+
+            let review;
+            try {
+              review = JSON.parse(raw);
+            } catch (e) {
+              // Try to extract JSON from markdown fences if Claude wrapped it
+              const match = raw.match(/```(?:json)?\s*([\s\S]*?)```/);
+              if (match) {
+                review = JSON.parse(match[1].trim());
+              } else {
+                core.warning(`Failed to parse review output: ${e.message}`);
+                return;
+              }
+            }
+
+            if (!review.issues || review.issues.length === 0) {
+              // No issues found — post a simple approval comment
+              await github.rest.pulls.createReview({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: context.issue.number,
+                body: review.summary || 'Automated review: no issues found.',
+                event: 'COMMENT'
+              });
+              return;
+            }
+
+            // Post inline comments for each issue
+            const comments = review.issues
+              .filter(i => i.file && i.line)
+              .map(i => ({
+                path: i.file,
+                line: i.line,
+                body: `**${i.severity}**: ${i.message}`
+              }));
+
+            await github.rest.pulls.createReview({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number,
+              body: review.summary,
+              event: 'COMMENT',
+              comments
+            });
