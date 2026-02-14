@@ -28,6 +28,8 @@ export const platformConnection = sqliteTable('platform_connection', {
 	platform: text('platform').notNull(),
 	platformUserId: text('platform_user_id').notNull(),
 	platformUsername: text('platform_username'),
+	// Tokens must be encrypted before storage — the OAuth flow that writes
+	// these fields is responsible for encrypting with a secret from env vars.
 	accessToken: text('access_token'),
 	refreshToken: text('refresh_token'),
 	tokenExpiresAt: integer('token_expires_at', { mode: 'timestamp' }),
