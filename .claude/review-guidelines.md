@@ -35,13 +35,55 @@ These are the conventions that matter during code review. Flag violations of the
 - New event types need a unit test (counter increments) and a category mapping test (message vs. high-value).
 - New UI features need Vitest component tests at minimum.
 
-## Vertical Slice Completeness
+## Vertical Slice Completeness (Highest Priority)
 
-Every feature PR should satisfy:
+This is the most important review criterion — more important than any individual item above. Every PR must be a Walking Skeleton: a complete vertical slice where hitting "merge" delivers the feature end-to-end. No manual steps, no follow-up PRs for "the deployment part," no Slack messages explaining how to get it running.
 
-- `pnpm dev` still works and the feature is exercisable locally
+### The Merge Rule
+
+After merge, with zero manual intervention:
+
+- The feature deploys to production (CI/CD handles build, deploy, migrations)
+- Any engineer can `git pull && pnpm install && pnpm dev` and the feature works locally
+- If new environment variables are required, the app fails fast at startup with a clear, actionable error (what's missing, what it's for, where to get it)
+
+If a PR doesn't satisfy all three, it is incomplete. Flag it.
+
+### Local Dev Is Part of the PR
+
+- `pnpm dev` starts everything the feature needs. If the feature adds a new worker or adapter, the root dev command must include it.
+- New features are exercisable locally without live platform connections. If the feature depends on external webhooks, a simulation script or test command that exercises the same code path must be included.
+- Local database changes apply automatically — migrations run, schema pushes work, no manual `db:push` required after pulling.
+
+### CI/CD Is Part of the PR
+
+- If the feature introduces a new deployable (worker, adapter, page), the deployment pipeline is updated in the same PR — not "we'll add that later."
+- Wrangler configs, GitHub Actions workflows, and deploy targets ship together with the code they deploy.
+- Secrets needed for deployment are documented with setup instructions (but never committed). If a reviewer would need a new key, that's called out prominently.
+
+### Docs Are Part of the PR
+
+- CLAUDE.md is updated if architecture, commands, environment setup, or the dev workflow changed.
+- `.env.example` is updated for any new environment variable, with a comment explaining its purpose.
+- New endpoints, scripts, or dev commands are documented where engineers will find them.
+- If the event flow or architecture diagram changed, update it.
+
+### Missing Config Fails Gracefully
+
+- New environment variables must be validated at startup. Missing required vars produce an immediate, clear error: `Missing TWITCH_CLIENT_ID — set it in .env (see .env.example).`
+- Don't silently fall back to broken defaults. A clear crash is better than a mystery bug ten steps later.
+- Optional variables (with safe defaults) should be documented as optional in `.env.example`.
+
+### Completeness Checklist
+
+Flag a PR as incomplete if any applicable item is missing:
+
+- `pnpm dev` works and the feature is exercisable locally
 - Tests exist (unit for logic, integration for worker endpoints, component for UI)
 - Shared types updated if an API or config shape changed
-- New endpoints or scripts documented in CLAUDE.md or relevant README
-- `.env.example` updated if new environment variables are introduced
+- CI/CD pipeline updated if a new deployable was introduced
+- CLAUDE.md or relevant README updated if architecture, commands, or setup changed
+- `.env.example` updated with comments for any new environment variables
+- Missing env vars produce a clear, actionable error message — not a silent failure
 - CI passes (tests, typecheck, lint)
+- No manual steps required post-merge (no hand-run deploys, migrations, or secret rotation)
