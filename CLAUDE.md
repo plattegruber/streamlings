@@ -31,6 +31,7 @@ Streamlings is a multi-platform interactive pet that lives on stream and respond
   - Receives events from platform adapters
   - Uses Durable Objects (StreamlingState) for stateful storage
   - Tracks event counts and streamling state persistently
+  - Exposes `/ws` WebSocket endpoint for real-time telemetry streaming (Hibernatable WebSocket API)
   - Platform-agnostic - works with any adapter
 
 **Frontend**:
@@ -52,6 +53,9 @@ Streamlings is a multi-platform interactive pet that lives on stream and respond
 ```
 Twitch EventSub → twitch-eventsub (:8788) → streamling-state (:8787)
                    [Maps IDs]                 [Stores state]
+                                                    ↓
+                                              /ws WebSocket
+                                              [Push telemetry every tick]
 ```
 
 This architecture allows adding new platform adapters (YouTube, Facebook, etc.) without changing core logic.

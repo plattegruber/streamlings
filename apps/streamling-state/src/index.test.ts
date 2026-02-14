@@ -112,4 +112,92 @@ describe('Streamlings Worker', () => {
 
 		expect(resp.status).toBe(405);
 	});
+
+	describe('WebSocket /ws endpoint', () => {
+		it('should return 426 for non-upgrade requests to /ws', async () => {
+			const resp = await worker.fetch('http://localhost:8787/ws', {
+				method: 'GET',
+			});
+			expect(resp.status).toBe(426);
+		});
+
+		it('should accept WebSocket upgrade and receive telemetry', async () => {
+			const ws = new WebSocket(`ws://${worker.address}:${worker.port}/ws`);
+
+			try {
+				// Wait for connection to open
+				await new Promise<void>((resolve, reject) => {
+					const timeout = setTimeout(() => reject(new Error('WebSocket connection timed out')), 10_000);
+					ws.addEventListener('open', () => { clearTimeout(timeout); resolve(); });
+					ws.addEventListener('error', (e) => { clearTimeout(timeout); reject(e); });
+				});
+
+				// Wait for a telemetry broadcast (arrives on next alarm tick)
+				const message = await new Promise<string>((resolve, reject) => {
+					const timeout = setTimeout(() => reject(new Error('Timed out waiting for telemetry')), 30_000);
+					ws.addEventListener('message', (event: MessageEvent) => {
+						clearTimeout(timeout);
+						resolve(typeof event.data === 'string' ? event.data : '');
+					});
+				});
+
+				const telemetry = JSON.parse(message);
+				expect(telemetry).toHaveProperty('energy');
+				expect(telemetry).toHaveProperty('mood');
+				expect(telemetry).toHaveProperty('recentActivity');
+				expect(telemetry).toHaveProperty('timestamp');
+			} finally {
+				ws.close();
+			}
+		}, 45_000);
+
+		it('should support multiple concurrent WebSocket connections', async () => {
+			const ws1 = new WebSocket(`ws://${worker.address}:${worker.port}/ws`);
+			const ws2 = new WebSocket(`ws://${worker.address}:${worker.port}/ws`);
+
+			try {
+				// Wait for both to connect
+				await Promise.all([
+					new Promise<void>((resolve, reject) => {
+						const timeout = setTimeout(() => reject(new Error('ws1 connection timed out')), 10_000);
+						ws1.addEventListener('open', () => { clearTimeout(timeout); resolve(); });
+						ws1.addEventListener('error', (e) => { clearTimeout(timeout); reject(e); });
+					}),
+					new Promise<void>((resolve, reject) => {
+						const timeout = setTimeout(() => reject(new Error('ws2 connection timed out')), 10_000);
+						ws2.addEventListener('open', () => { clearTimeout(timeout); resolve(); });
+						ws2.addEventListener('error', (e) => { clearTimeout(timeout); reject(e); });
+					}),
+				]);
+
+				// Both should receive telemetry on the next alarm tick
+				const [msg1, msg2] = await Promise.all([
+					new Promise<string>((resolve, reject) => {
+						const timeout = setTimeout(() => reject(new Error('ws1 timed out')), 30_000);
+						ws1.addEventListener('message', (event: MessageEvent) => {
+							clearTimeout(timeout);
+							resolve(typeof event.data === 'string' ? event.data : '');
+						});
+					}),
+					new Promise<string>((resolve, reject) => {
+						const timeout = setTimeout(() => reject(new Error('ws2 timed out')), 30_000);
+						ws2.addEventListener('message', (event: MessageEvent) => {
+							clearTimeout(timeout);
+							resolve(typeof event.data === 'string' ? event.data : '');
+						});
+					}),
+				]);
+
+				const telemetry1 = JSON.parse(msg1);
+				const telemetry2 = JSON.parse(msg2);
+
+				expect(telemetry1).toHaveProperty('energy');
+				expect(telemetry2).toHaveProperty('energy');
+				expect(telemetry1.mood.currentState).toBe(telemetry2.mood.currentState);
+			} finally {
+				ws1.close();
+				ws2.close();
+			}
+		}, 45_000);
+	});
 });

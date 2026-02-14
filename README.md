@@ -13,6 +13,7 @@ Streamlings uses a multi-worker architecture with platform adapters:
 - **apps/streamling-state** - Core state management (port 8787)
   - Platform-agnostic Durable Object storage
   - Tracks event counts and streamling state
+  - Exposes `/ws` WebSocket for real-time telemetry streaming
   - Can receive events from multiple platform adapters
 
 - **apps/web** - SvelteKit web dashboard
@@ -52,6 +53,22 @@ pnpm test:event  # Sends random Twitch event
 ```
 
 Events flow: Twitch CLI → twitch-eventsub (:8788) → streamling-state (:8787)
+
+### WebSocket Telemetry
+
+The StreamlingState worker exposes a `/ws` WebSocket endpoint that pushes `StreamlingTelemetry` JSON every tick (~10 seconds). Connect while the worker is running:
+
+```js
+const ws = new WebSocket('ws://localhost:8787/ws');
+ws.onmessage = (event) => {
+  const telemetry = JSON.parse(event.data);
+  console.log(telemetry.mood.currentState, telemetry.energy.energy);
+};
+```
+
+The endpoint also supports `ping`/`pong` keep-alive (send `"ping"`, receive `"pong"`).
+
+The HTTP `GET /telemetry` endpoint remains available for one-off polling and debugging.
 
 ## Testing
 
