@@ -1,5 +1,12 @@
 # Repository Guidelines
 
+## Required Reading
+
+Before working on this codebase, read these companion documents:
+
+- **[PHILOSOPHY.md](./PHILOSOPHY.md)** — Product vision, design principles, and what we are (and aren't) building
+- **[IMPLEMENTATION.md](./IMPLEMENTATION.md)** — Technical opinions, code conventions, and guidance for adding features
+
 ## Project Structure & Module Organization
 This monorepo uses `pnpm` workspaces. Runtime workers live in `apps/streamling-state` (Durable Object core) and `apps/twitch-eventsub` (EventSub adapter). The SvelteKit dashboard is in `apps/web`. Shared types and utilities belong in `packages/shared`. Keep integration assets, scripts, and wrangler configs within their respective app directories to avoid cross-app coupling.
 

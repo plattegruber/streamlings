@@ -2,6 +2,13 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Required Reading
+
+Before working on this codebase, read these companion documents:
+
+- **[PHILOSOPHY.md](./PHILOSOPHY.md)** — Product vision, design principles, and what we are (and aren't) building
+- **[IMPLEMENTATION.md](./IMPLEMENTATION.md)** — Technical opinions, code conventions, and guidance for adding features
+
 ## Project Overview
 
 Streamlings is a multi-platform interactive pet that lives on stream and responds to chat - like a Tamagotchi powered by your audience. The project uses a pnpm workspace monorepo with a multi-worker architecture that supports multiple streaming platforms.
