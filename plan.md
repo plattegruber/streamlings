@@ -25,13 +25,12 @@ A `streamOnline` boolean is persisted to Durable Object storage so the system ca
 
 **New lifecycle methods on the Durable Object:**
 
-- `handleStreamOnline(now: number)`: Sets `streamOnline = true`. Resets energy state to initial (`createInitialEnergyState()`). Resets mood state to fresh Idle (`createInitialMoodState()`). Resets tick counters. Persists all state. Logs the transition.
-- `handleStreamOffline(now: number)`: Sets `streamOnline = false`. Forces mood to `MoodState.Sleeping` immediately (sets `currentState`, `stateEnteredAt`, resets `transitionConditionMetAt`, zeroes drives). Resets energy state to initial. Persists all state. Logs the transition.
+- `handleStreamOnline(now: number)`: Sets `streamOnline = true`. Resets energy state to initial (`createInitialEnergyState()`). Resets mood state to fresh Idle (`createInitialMoodState()`). Resets tick counters. Increments the `stream.online` event count internally (calls the same counting logic as `incrementEvent`). After all in-memory state is updated, persists everything in a single `Promise.all` at the end of the method (`stream_online`, `energy_state`, `mood_state`, `event_counts`). Logs the transition.
+- `handleStreamOffline(now: number)`: Sets `streamOnline = false`. Forces mood to `MoodState.Sleeping` immediately (sets `currentState`, `stateEnteredAt`, resets `transitionConditionMetAt`, zeroes drives). Resets energy state to initial. Increments the `stream.offline` event count internally. After all in-memory state is updated, persists everything in a single `Promise.all` at the end of the method. Logs the transition.
 
 **Updated webhook handler (`POST /webhook`):**
 - Before the generic `incrementEvent` path, check if `eventType` is `stream.online` or `stream.offline`.
-- Route to the appropriate lifecycle method. Return a JSON response with the current telemetry (so callers can see the immediate state change).
-- These events still get counted via `incrementEvent` for observability, but the lifecycle method runs first to force the state transition.
+- Route to the appropriate lifecycle method and return. The lifecycle method handles everything (state transition, event counting, persistence) — the webhook handler does not call `incrementEvent` separately for lifecycle events. This keeps each Durable Object method as a self-contained atomic operation, consistent with the "state mutations through named methods" convention.
 
 **Updated `getTelemetry()`:**
 - Include `streamOnline` in the returned `StreamlingTelemetry`.
@@ -78,6 +77,7 @@ echo ""
 echo "✅ Check telemetry: curl http://localhost:8787/telemetry"
 ```
 
+- Mark the script as executable (`chmod +x`).
 - Add `"test:lifecycle": "./scripts/send-stream-lifecycle.sh"` to `package.json` scripts.
 
 ## Design Decisions
