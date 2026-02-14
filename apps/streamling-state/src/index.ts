@@ -184,6 +184,9 @@ export class StreamlingState extends DurableObject<Env> {
 		this.uniqueChattersInTick = new Set();
 		this.highValueEventsInTick = 0;
 
+		// Broadcast telemetry to connected WebSocket clients
+		await this.broadcastTelemetry();
+
 		// Schedule next tick
 		await this.scheduleNextTick();
 	}
@@ -276,6 +279,74 @@ export class StreamlingState extends DurableObject<Env> {
 			internalDrive: this.internalDriveConfig,
 		};
 	}
+
+	/**
+	 * Handle incoming HTTP requests, including WebSocket upgrades
+	 */
+	async fetch(request: Request): Promise<Response> {
+		const url = new URL(request.url);
+
+		if (url.pathname !== '/ws') {
+			return new Response('Not Found', { status: 404 });
+		}
+
+		// Reject non-upgrade requests
+		if (request.headers.get('Upgrade') !== 'websocket') {
+			return new Response('Expected WebSocket upgrade', { status: 426 });
+		}
+
+		const pair = new WebSocketPair();
+		const [client, server] = Object.values(pair);
+
+		this.ctx.acceptWebSocket(server);
+
+		// Auto-respond to ping/pong without waking the DO
+		this.ctx.setWebSocketAutoResponse(
+			new WebSocketRequestResponsePair('ping', 'pong'),
+		);
+
+		return new Response(null, { status: 101, webSocket: client });
+	}
+
+	/**
+	 * Handle incoming WebSocket messages (Hibernation API)
+	 */
+	async webSocketMessage(ws: WebSocket, message: string | ArrayBuffer): Promise<void> {
+		// No client-to-server messages expected; ignore
+	}
+
+	/**
+	 * Handle WebSocket close (Hibernation API)
+	 */
+	async webSocketClose(ws: WebSocket, code: number, reason: string, wasClean: boolean): Promise<void> {
+		ws.close(code, reason);
+	}
+
+	/**
+	 * Handle WebSocket errors (Hibernation API)
+	 */
+	async webSocketError(ws: WebSocket, error: unknown): Promise<void> {
+		console.error('WebSocket error:', error);
+	}
+
+	/**
+	 * Broadcast current telemetry to all connected WebSocket clients
+	 */
+	private async broadcastTelemetry(): Promise<void> {
+		const sockets = this.ctx.getWebSockets();
+		if (sockets.length === 0) return;
+
+		const telemetry = await this.getTelemetry();
+		const payload = JSON.stringify(telemetry);
+
+		for (const ws of sockets) {
+			try {
+				ws.send(payload);
+			} catch {
+				try { ws.close(1011, 'Send failed'); } catch { /* already closed */ }
+			}
+		}
+	}
 }
 
 export default {
@@ -309,6 +380,11 @@ export default {
 				status: 200,
 				headers: { 'Content-Type': 'application/json' },
 			});
+		}
+
+		// Route: /ws - WebSocket telemetry stream (forwarded to Durable Object)
+		if (url.pathname === '/ws') {
+			return stub.fetch(request);
 		}
 
 		// Route: /webhook endpoint
