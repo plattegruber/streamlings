@@ -103,7 +103,7 @@ Using `unstable_dev` (same pattern as `streamling-state/src/index.test.ts`):
 - **Returns 400 for invalid payloads**
 - **Returns 405 for unsupported methods**
 
-Note: Integration tests require the adapter to have a reachable `STREAMLING_STATE_URL`. In test, either mock the downstream or point to a local dev instance. Will evaluate best approach during implementation — may need to start a streamling-state worker in test setup or stub the fetch.
+Note: `STREAMLING_STATE_URL` is already configured in `wrangler.toml` (defaults to `http://localhost:8787` across all environments). Integration tests will stub the downstream fetch to `STREAMLING_STATE_URL` rather than requiring a running streamling-state instance — this keeps tests isolated and avoids cross-worker dependencies in CI. The stub verifies the forwarded payload shape (including `internal_user_id`) without actually hitting the Durable Object.
 
 ### 8. Add vitest config — `apps/twitch-eventsub/vitest.config.ts`
 
