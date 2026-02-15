@@ -1,0 +1,16 @@
+# Version control
+.git
+
+# Build artifacts
+_build
+deps
+
+# Generated on crash by the VM
+erl_crash.dump
+
+# Node.js (assets pipeline installs its own)
+assets/node_modules
+
+# Static digests (rebuilt during docker build)
+priv/static/assets
+priv/static/cache_manifest.json

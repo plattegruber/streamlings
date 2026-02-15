@@ -42,6 +42,15 @@ Streamlings is a multi-platform interactive pet that lives on stream and respond
   - Handles OAuth flow and user management
   - Uses TailwindCSS v4 for styling
 
+**Control Plane**:
+
+- **apps/lattice**: Phoenix 1.7 + LiveView application (Elixir), deployed to Fly.io
+  - Streamer-facing control plane for managing streamling configuration
+  - Health check at `GET /health`
+  - Uses Bandit HTTP server, Phoenix PubSub, Telemetry
+  - No database yet (--no-ecto) — will connect to streamling-state worker API
+  - Asset pipeline: esbuild + Tailwind CSS + Heroicons
+
 **Shared**:
 
 - **packages/shared**: Shared TypeScript types
@@ -65,8 +74,11 @@ This architecture allows adding new platform adapters (YouTube, Facebook, etc.) 
 - **SvelteKit**: Web framework (adapter-cloudflare for Pages deployment)
 - **Drizzle ORM**: Database ORM with libSQL client
 - **Cloudflare Workers + Durable Objects**: Serverless backend for Twitch event handling
+- **Phoenix + LiveView**: Elixir web framework for the Lattice control plane
 - **pnpm workspaces**: Monorepo package management
+- **Mix**: Elixir build tool (for apps/lattice)
 - **Wrangler**: Cloudflare Workers development and deployment
+- **Fly.io**: Deployment target for the Lattice app
 - **Twitch API**: EventSub webhooks for chat/stream events
 
 ## Development Commands
@@ -74,17 +86,22 @@ This architecture allows adding new platform adapters (YouTube, Facebook, etc.) 
 ### Workspace-level commands (run from root):
 
 ```bash
-# Start all apps in parallel development mode
+# Start all JS/TS apps in parallel development mode
 pnpm dev
 
-# Build all apps
+# Build all JS/TS apps
 pnpm build
 
-# Lint all apps
+# Lint all JS/TS apps
 pnpm lint
 
-# Type-check all apps
+# Type-check all JS/TS apps
 pnpm typecheck
+
+# Lattice (Elixir — not covered by pnpm -r)
+pnpm lattice:setup   # Install Elixir deps + build assets
+pnpm lattice:dev     # Start Phoenix dev server on :4000
+pnpm lattice:test    # Run ExUnit tests
 ```
 
 ### Web app (apps/web):
@@ -138,6 +155,30 @@ pnpm deploy
 
 # Run tests
 pnpm test
+```
+
+### Lattice Control Plane (apps/lattice):
+
+```bash
+cd apps/lattice
+
+# First-time setup (install deps + build assets)
+mix setup
+
+# Development server (runs on port 4000)
+mix phx.server
+
+# Run tests
+mix test
+
+# Compile with warnings as errors
+mix compile --warnings-as-errors
+
+# Build release (for production)
+MIX_ENV=prod mix release
+
+# Asset pipeline
+mix assets.deploy    # Build + minify + digest for production
 ```
 
 ### Twitch EventSub Adapter (apps/twitch-eventsub):
@@ -197,6 +238,11 @@ Events will flow: Twitch CLI → adapter (:8788) → streamling-state (:8787)
    - Set `TWITCH_CLIENT_ID` in the `[vars]` section
    - Set secrets via CLI: `wrangler secret put TWITCH_CLIENT_SECRET`
 
+4. For the Lattice app (production only):
+   - `SECRET_KEY_BASE`: Phoenix secret (generate with `mix phx.gen.secret`)
+   - `PHX_HOST`: Production hostname (e.g. `streamlings-lattice.fly.dev`)
+   - `FLY_API_TOKEN`: Fly.io deploy token (CI secret)
+
 ## Database Schema
 
 Database schema is defined in `apps/web/src/lib/server/db/schema.js` using Drizzle ORM. The database client is initialized in `apps/web/src/lib/server/db/index.js` and pulls `DATABASE_URL` from SvelteKit's private environment.
@@ -214,8 +260,10 @@ Database schema is defined in `apps/web/src/lib/server/db/schema.js` using Drizz
 - **Wrangler**: For local Workers development and Durable Objects testing
 - **Vitest**: Unit testing with browser support
 - **Playwright**: End-to-end testing
+- **ExUnit**: Elixir test framework (for apps/lattice)
 
 ## Deployment Targets
 
 - **Web app**: Cloudflare Pages (via @sveltejs/adapter-cloudflare)
-- **Worker**: Cloudflare Workers with Durable Objects enabled
+- **Workers**: Cloudflare Workers with Durable Objects enabled
+- **Lattice**: Fly.io (Docker-based deployment, see `apps/lattice/fly.toml`)

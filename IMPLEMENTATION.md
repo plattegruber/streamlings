@@ -58,6 +58,17 @@ We deploy on Cloudflare. Workers and Durable Objects are the compute model. Don'
 - New event types need both a unit test (does the counter increment?) and a check that the activity category mapping is correct (message vs. high-value)
 - Web app tests are currently minimal. New UI features should include Vitest component tests at minimum
 
+### Elixir / Phoenix (Lattice)
+
+- Elixir 1.14+, OTP 25+. Use the versions pinned in `apps/lattice/mix.exs` and the Dockerfile
+- Follow standard Phoenix conventions — contexts for domain logic, controllers/live views for the web layer
+- `mix compile --warnings-as-errors` in CI. Don't suppress warnings locally either
+- No Ecto yet. When it's added, use migrations (not `mix ecto.push`) for production schema changes
+- Config goes in `config/*.exs`. Runtime secrets go in `config/runtime.exs` via `System.get_env/1`
+- Tests use ExUnit. Run with `mix test`. Keep tests fast — no external service calls in unit tests
+- The asset pipeline uses esbuild + Tailwind (configured in `config/config.exs`). Don't add Node.js or npm to the Lattice app — the Mix-managed asset tools handle it
+- Deployments are Docker-based releases on Fly.io. Use `mix release` — don't deploy by running `mix phx.server` in production
+
 ### Frontend (SvelteKit)
 
 - Svelte 5 with runes — use `$state`, `$derived`, `$effect` instead of Svelte 4 stores
