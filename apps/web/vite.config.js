@@ -4,11 +4,7 @@ import { defineConfig } from 'vitest/config';
 import { sveltekit } from '@sveltejs/kit/vite';
 
 export default defineConfig({
-	plugins: [
-		tailwindcss(),
-		sveltekit(),
-		devtoolsJson()
-	],
+	plugins: [tailwindcss(), sveltekit(), devtoolsJson()],
 	test: {
 		expect: { requireAssertions: true },
 		projects: [
@@ -20,6 +16,7 @@ export default defineConfig({
 					browser: {
 						enabled: true,
 						provider: 'playwright',
+						headless: true,
 						instances: [{ browser: 'chromium' }]
 					},
 					include: ['src/**/*.svelte.{test,spec}.{js,ts}'],

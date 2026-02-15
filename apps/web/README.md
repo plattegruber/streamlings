@@ -70,6 +70,7 @@ The app automatically deploys to Cloudflare Pages when changes are pushed to the
 ### Setup Cloudflare Pages Project
 
 1. **Create D1 Database:**
+
    ```sh
    # Create production database
    wrangler d1 create streamlings-db
@@ -81,6 +82,7 @@ The app automatically deploys to Cloudflare Pages when changes are pushed to the
 2. **Update wrangler.toml** with the database IDs returned from the commands above
 
 3. **Run migrations on D1:**
+
    ```sh
    # For production
    wrangler d1 execute streamlings-db --remote --file=drizzle/migrations/xxxx.sql
@@ -94,6 +96,7 @@ The app automatically deploys to Cloudflare Pages when changes are pushed to the
    - Add the following variables:
 
 **Production & Preview:**
+
 - `CLERK_PUBLISHABLE_KEY`: Your Clerk publishable key
 - `CLERK_SECRET_KEY`: Your Clerk secret key (encrypted)
 - `DATABASE_URL`: Will be automatically bound from D1 (no manual config needed)
@@ -101,6 +104,7 @@ The app automatically deploys to Cloudflare Pages when changes are pushed to the
 ### GitHub Secrets Required
 
 Ensure these secrets are set in your GitHub repository:
+
 - `CLOUDFLARE_API_TOKEN`: API token with Pages write access
 - `CLOUDFLARE_ACCOUNT_ID`: Your Cloudflare account ID
 
@@ -113,6 +117,7 @@ cp .env.example .env
 ```
 
 Required variables:
+
 - `DATABASE_URL`: Database connection string (local: `file:local.db`)
 - `CLERK_PUBLISHABLE_KEY`: Clerk publishable key
 - `CLERK_SECRET_KEY`: Clerk secret key

@@ -11,6 +11,6 @@
 	<link rel="icon" href={favicon} />
 </svelte:head>
 
-<ClerkProvider {...data} publishableKey={publishableKey}>
+<ClerkProvider {...data} {publishableKey}>
 	{@render children?.()}
 </ClerkProvider>
