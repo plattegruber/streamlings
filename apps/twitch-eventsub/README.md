@@ -72,6 +72,11 @@ pnpm test:event
 # Send specific stream lifecycle events
 pnpm test:online
 pnpm test:offline
+
+# Run full stream simulation (four phases: quiet → ramp up → hype → cool down)
+pnpm test:simulate              # Real-time (~12 min)
+pnpm test:simulate -- --speed 10   # Fast (~72 sec)
+pnpm test:simulate -- --speed 100  # Smoke test (~7 sec)
 ```
 
 You should see:

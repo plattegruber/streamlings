@@ -16,7 +16,8 @@
     "test:online": "./scripts/send-stream-online.sh",
     "test:offline": "./scripts/send-stream-offline.sh",
     "test:chat": "./scripts/send-chat-events.sh",
-    "test:burst": "./scripts/send-burst-events.sh"
+    "test:burst": "./scripts/send-burst-events.sh",
+    "test:simulate": "./scripts/simulate-stream.sh"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20250423.0",
