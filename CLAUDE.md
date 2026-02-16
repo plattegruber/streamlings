@@ -160,6 +160,11 @@ pnpm test
 # Test EventSub integration
 pnpm test:verify  # Verify challenge response
 pnpm test:event   # Send random test event (forwards to streamling-state)
+
+# Stream simulation (exercises energy/mood system end-to-end)
+pnpm test:simulate                 # Real-time (~12 min)
+pnpm test:simulate -- --speed 10   # Fast (~72 sec)
+pnpm test:simulate -- --speed 100  # Smoke test (~7 sec)
 ```
 
 ### Local Development Workflow
@@ -179,6 +184,11 @@ To test the full event flow:
 3. **Terminal 3**: Send test events
    ```bash
    cd apps/twitch-eventsub && pnpm test:event
+   ```
+
+4. **Or run a full simulation** (four phases: quiet → ramp up → hype → cool down):
+   ```bash
+   cd apps/twitch-eventsub && pnpm test:simulate -- --speed 10
    ```
 
 Events will flow: Twitch CLI → adapter (:8788) → streamling-state (:8787)
