@@ -2,21 +2,28 @@
 	import { useClerkContext, SignOutButton, UserButton } from 'svelte-clerk';
 	import { onDestroy } from 'svelte';
 	import { createTelemetryPoller } from '$lib/telemetry.svelte.js';
+	import { createEventsPoller } from '$lib/events.svelte.js';
 	import MoodIndicator from '$lib/components/MoodIndicator.svelte';
 	import EnergyGauge from '$lib/components/EnergyGauge.svelte';
 	import TimeInState from '$lib/components/TimeInState.svelte';
 	import InternalDrives from '$lib/components/InternalDrives.svelte';
+	import ActivityFeed from '$lib/components/ActivityFeed.svelte';
 
 	const ctx = useClerkContext();
 	const user = $derived(ctx.user);
 
-	/** @type {{ data: { workerUrl: string } }} */
+	/** @type {{ data: { workerUrl: string, streamerId: string } }} */
 	let { data } = $props();
 
 	const poller = createTelemetryPoller(data.workerUrl);
-	onDestroy(() => poller.destroy());
+	const eventsPoller = createEventsPoller(data.workerUrl, data.streamerId);
+	onDestroy(() => {
+		poller.destroy();
+		eventsPoller.destroy();
+	});
 
 	const telemetry = $derived(poller.data);
+	const events = $derived(eventsPoller.data ?? []);
 </script>
 
 <div class="min-h-screen bg-gray-50">
@@ -95,5 +102,9 @@
 				</p>
 			{/if}
 		{/if}
+
+		<div class="mt-8 rounded-lg bg-white p-6 shadow">
+			<ActivityFeed {events} />
+		</div>
 	</main>
 </div>
