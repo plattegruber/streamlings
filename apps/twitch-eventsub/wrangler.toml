@@ -6,6 +6,12 @@ compatibility_date = "2025-10-23"
 [vars]
 STREAMLING_STATE_URL = "http://localhost:8787"
 
+# Secrets (set via `wrangler secret put`, NOT in [vars]):
+#   TWITCH_WEBHOOK_SECRET — HMAC-SHA256 secret for verifying EventSub webhook
+#                           signatures. Must match the secret used when creating
+#                           the EventSub subscription. If not set, signature
+#                           verification is skipped (local dev only).
+
 # Local dev ports
 [dev]
 port = 8788
