@@ -52,18 +52,18 @@ You'll see a live event count table in the worker logs (terminal 1) after each e
 
 ### Viewing Current Counts
 
-Query the current event counts:
+Query the current event counts for a specific streamer:
 
 ```bash
-curl http://localhost:8787/webhook
+curl http://localhost:8787/webhook/STREAMER_ID
 ```
 
 ### Viewing Recent Events
 
-Query the recent events ring buffer (up to 200 most recent events):
+Query the recent events ring buffer (up to 200 most recent events) for a specific streamer:
 
 ```bash
-curl http://localhost:8787/events
+curl http://localhost:8787/events/STREAMER_ID
 ```
 
 Each event record contains:
@@ -86,13 +86,20 @@ Set in `wrangler.toml` under `[vars]` for local development. For production, set
 
 ## Architecture
 
-- **StreamlingState** - Durable Object that tracks event counts and recent event history
-- **/webhook** - POST endpoint that receives Twitch EventSub notifications
-- **GET /webhook** - Returns current event counts as JSON
-- **GET /events** - Returns the recent events ring buffer (up to 200 events, newest last)
-- **GET /telemetry** - Returns current energy/mood telemetry snapshot
-- **GET /config** - Returns current configuration
-- **POST /config** - Updates configuration parameters
-- **/ws** - WebSocket endpoint for real-time telemetry streaming
+- **StreamlingState** - Durable Object that tracks event counts and recent event history. Each streamer gets their own DO instance, addressed by streamer ID via `env.STREAMLING_STATE.getByName(streamerId)`.
+
+### Per-Streamer Routing
+
+All endpoints (except `POST /webhook`) require a streamer ID as a path parameter. The `POST /webhook` endpoint extracts the streamer ID from `event.internal_user_id` in the request body.
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/webhook` | Receive EventSub notification (streamer ID from `event.internal_user_id`) |
+| `GET` | `/webhook/:streamerId` | Return current event counts for a streamer |
+| `GET` | `/telemetry/:streamerId` | Return current energy/mood telemetry snapshot |
+| `GET` | `/config/:streamerId` | Return current configuration |
+| `POST` | `/config/:streamerId` | Update configuration parameters |
+| `GET` | `/events/:streamerId` | Return recent events ring buffer (up to 200 events, newest last) |
+| `GET` | `/ws/:streamerId` | WebSocket endpoint for real-time telemetry streaming |
 
 All HTTP responses from the worker include CORS headers (`Access-Control-Allow-Origin`, `Access-Control-Allow-Methods`, `Access-Control-Allow-Headers`). `OPTIONS` preflight requests return `204 No Content` with the appropriate headers.
