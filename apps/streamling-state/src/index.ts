@@ -7,6 +7,7 @@ import type {
 	EnergyConfig,
 	MoodTransitionConfig,
 	InternalDriveConfig,
+	EventRecord,
 } from '@streamlings/shared/types';
 import {
 	createInitialEnergyState,
@@ -19,6 +20,11 @@ import {
 	DEFAULT_MOOD_TRANSITION_CONFIG,
 	DEFAULT_INTERNAL_DRIVE_CONFIG,
 } from './mood';
+import {
+	MAX_RECENT_EVENTS,
+	createEventRecord,
+	appendToRingBuffer,
+} from './events';
 
 /**
  * Event type categories for activity metrics
@@ -42,6 +48,7 @@ export class StreamlingState extends DurableObject<Env> {
 	private energyState: EnergyState;
 	private moodState: MoodStateData;
 	private recentActivity: ActivityMetrics;
+	private recentEvents: EventRecord[];
 
 	// Configuration
 	private energyConfig: EnergyConfig;
@@ -63,6 +70,7 @@ export class StreamlingState extends DurableObject<Env> {
 		this.messageCountInTick = 0;
 		this.uniqueChattersInTick = new Set();
 		this.highValueEventsInTick = 0;
+		this.recentEvents = [];
 		this.recentActivity = {
 			messagesPerMin: 0,
 			uniqueChattersPerMin: 0,
@@ -77,7 +85,7 @@ export class StreamlingState extends DurableObject<Env> {
 
 		// Load persisted state from storage on initialization
 		ctx.blockConcurrencyWhile(async () => {
-			const [storedCounts, storedEnergy, storedMood, storedConfig] = await Promise.all([
+			const [storedCounts, storedEnergy, storedMood, storedConfig, storedRecentEvents] = await Promise.all([
 				ctx.storage.get<Record<string, number>>('event_counts'),
 				ctx.storage.get<EnergyState>('energy_state'),
 				ctx.storage.get<MoodStateData>('mood_state'),
@@ -86,6 +94,7 @@ export class StreamlingState extends DurableObject<Env> {
 					moodTransition: MoodTransitionConfig;
 					internalDrive: InternalDriveConfig;
 				}>('config'),
+				ctx.storage.get<EventRecord[]>('recentEvents'),
 			]);
 
 			if (storedCounts) {
@@ -104,6 +113,10 @@ export class StreamlingState extends DurableObject<Env> {
 				this.energyConfig = storedConfig.energy;
 				this.moodTransitionConfig = storedConfig.moodTransition;
 				this.internalDriveConfig = storedConfig.internalDrive;
+			}
+
+			if (storedRecentEvents) {
+				this.recentEvents = storedRecentEvents;
 			}
 
 			// Schedule the first tick
@@ -212,8 +225,15 @@ export class StreamlingState extends DurableObject<Env> {
 			this.highValueEventsInTick++;
 		}
 
-		// Persist event counts
-		await this.ctx.storage.put('event_counts', Object.fromEntries(this.eventCounts));
+		// Build an EventRecord and append to the ring buffer
+		const record = createEventRecord(eventType, eventData);
+		this.recentEvents = appendToRingBuffer(this.recentEvents, record);
+
+		// Persist event counts and recent events
+		await Promise.all([
+			this.ctx.storage.put('event_counts', Object.fromEntries(this.eventCounts)),
+			this.ctx.storage.put('recentEvents', this.recentEvents),
+		]);
 	}
 
 	/**
@@ -221,6 +241,13 @@ export class StreamlingState extends DurableObject<Env> {
 	 */
 	async getCounts(): Promise<Record<string, number>> {
 		return Object.fromEntries(this.eventCounts);
+	}
+
+	/**
+	 * Get the recent events ring buffer
+	 */
+	async getRecentEvents(): Promise<EventRecord[]> {
+		return this.recentEvents;
 	}
 
 	/**
@@ -286,26 +313,35 @@ export class StreamlingState extends DurableObject<Env> {
 	async fetch(request: Request): Promise<Response> {
 		const url = new URL(request.url);
 
-		if (url.pathname !== '/ws') {
-			return new Response('Not Found', { status: 404 });
+		// /ws - WebSocket telemetry stream
+		if (url.pathname === '/ws') {
+			// Reject non-upgrade requests
+			if (request.headers.get('Upgrade') !== 'websocket') {
+				return new Response('Expected WebSocket upgrade', { status: 426 });
+			}
+
+			const pair = new WebSocketPair();
+			const [client, server] = Object.values(pair);
+
+			this.ctx.acceptWebSocket(server);
+
+			// Auto-respond to ping/pong without waking the DO
+			this.ctx.setWebSocketAutoResponse(
+				new WebSocketRequestResponsePair('ping', 'pong'),
+			);
+
+			return new Response(null, { status: 101, webSocket: client });
 		}
 
-		// Reject non-upgrade requests
-		if (request.headers.get('Upgrade') !== 'websocket') {
-			return new Response('Expected WebSocket upgrade', { status: 426 });
+		// /events - recent events ring buffer
+		if (url.pathname === '/events' && request.method === 'GET') {
+			const events = await this.getRecentEvents();
+			return new Response(JSON.stringify(events), {
+				headers: { 'Content-Type': 'application/json' },
+			});
 		}
 
-		const pair = new WebSocketPair();
-		const [client, server] = Object.values(pair);
-
-		this.ctx.acceptWebSocket(server);
-
-		// Auto-respond to ping/pong without waking the DO
-		this.ctx.setWebSocketAutoResponse(
-			new WebSocketRequestResponsePair('ping', 'pong'),
-		);
-
-		return new Response(null, { status: 101, webSocket: client });
+		return new Response('Not Found', { status: 404 });
 	}
 
 	/**
@@ -422,6 +458,14 @@ export default {
 				status: 200,
 				headers: { 'Content-Type': 'application/json' },
 			}), allowedOrigin);
+		}
+
+		// Route: GET /events - recent events ring buffer
+		if (url.pathname === '/events' && request.method === 'GET') {
+			const events = await stub.getRecentEvents();
+			return new Response(JSON.stringify(events, null, 2), {
+				headers: { 'Content-Type': 'application/json' },
+			});
 		}
 
 		// Route: /ws - WebSocket telemetry stream (forwarded to Durable Object)
