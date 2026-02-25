@@ -7,7 +7,8 @@ on:
     branches: [main]
 
 jobs:
-  test:
+  test-workers:
+    name: Worker tests
     runs-on: ubuntu-latest
 
     steps:
@@ -27,3 +28,28 @@ jobs:
 
       - name: Run streamling-state tests
         run: pnpm --filter @streamlings/streamling-state test
+
+  test-web:
+    name: Web app tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Typecheck web app
+        run: pnpm --filter web check
+
+      - name: Run web app unit tests
+        run: pnpm --filter web test:unit -- --run

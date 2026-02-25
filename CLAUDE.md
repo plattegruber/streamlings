@@ -225,6 +225,31 @@ Database schema is defined in `apps/web/src/lib/server/db/schema.js` using Drizz
 - **Vitest**: Unit testing with browser support
 - **Playwright**: End-to-end testing
 
+## CI Pipeline
+
+The project uses GitHub Actions for continuous integration and deployment.
+
+### Tests (`.github/workflows/test.yml`)
+
+Runs on every push to `main` and on every pull request targeting `main`. Two jobs run **in parallel**:
+
+- **Worker tests**: Runs `pnpm --filter @streamlings/streamling-state test` (Vitest)
+- **Web app tests**: Runs Svelte type checking (`pnpm --filter web check`) and Vitest unit tests (`pnpm --filter web test:unit -- --run`)
+
+Playwright E2E tests are not included in CI (run those locally).
+
+### Deploy Workers (`.github/workflows/deploy.yml`)
+
+Deploys streamling-state and twitch-eventsub workers on push to `main` when worker-related files change. Runs preview deploys with smoke tests before promoting to production.
+
+### Deploy Web App (`.github/workflows/deploy-web.yml`)
+
+Deploys the SvelteKit web app to Cloudflare Pages on push to `main` when web-related files change. Runs its own type checking and unit tests before building and deploying (preview with smoke test, then production).
+
+### PR Review (`.github/workflows/pr-review.yml`)
+
+Runs an automated Claude-powered code review on pull requests.
+
 ## Deployment Targets
 
 - **Web app**: Cloudflare Pages (via @sveltejs/adapter-cloudflare)
