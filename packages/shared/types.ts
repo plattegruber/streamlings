@@ -8,6 +8,31 @@ export type InstallUserTokenBody = {
 };
 
 // ============================================================================
+// Event History Types
+// ============================================================================
+
+/**
+ * Category of a recorded event, derived from EVENT_CATEGORIES
+ */
+export type EventCategory = 'message' | 'high_value' | 'interaction' | 'lifecycle';
+
+/**
+ * A single recorded event in the recent-events ring buffer
+ */
+export interface EventRecord {
+  /** Unix epoch milliseconds when the event was recorded */
+  timestamp: number;
+  /** Platform event type, e.g. "channel.chat.message" */
+  eventType: string;
+  /** Broad category for this event */
+  category: EventCategory;
+  /** Internal user ID, if available */
+  userId?: string;
+  /** Extra context: username, amount, tier, raider name, etc. */
+  metadata?: Record<string, string | number>;
+}
+
+// ============================================================================
 // Energy & Mood System Types
 // ============================================================================
 

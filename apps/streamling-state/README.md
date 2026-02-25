@@ -58,6 +58,24 @@ Query the current event counts:
 curl http://localhost:8787/webhook
 ```
 
+### Viewing Recent Events
+
+Query the recent events ring buffer (up to 200 most recent events):
+
+```bash
+curl http://localhost:8787/events
+```
+
+Each event record contains:
+
+| Field       | Type     | Description                                          |
+|-------------|----------|------------------------------------------------------|
+| `timestamp` | number   | Unix epoch milliseconds                              |
+| `eventType` | string   | Platform event type, e.g. `channel.chat.message`     |
+| `category`  | string   | `message`, `high_value`, `interaction`, or `lifecycle`|
+| `userId`    | string?  | Internal user ID (if available)                      |
+| `metadata`  | object?  | Extra context: username, amount, tier, raider, etc.  |
+
 ## Environment Variables
 
 | Variable | Description | Default |
@@ -68,8 +86,13 @@ Set in `wrangler.toml` under `[vars]` for local development. For production, set
 
 ## Architecture
 
-- **StreamlingState** - Durable Object that tracks event counts
+- **StreamlingState** - Durable Object that tracks event counts and recent event history
 - **/webhook** - POST endpoint that receives Twitch EventSub notifications
 - **GET /webhook** - Returns current event counts as JSON
+- **GET /events** - Returns the recent events ring buffer (up to 200 events, newest last)
+- **GET /telemetry** - Returns current energy/mood telemetry snapshot
+- **GET /config** - Returns current configuration
+- **POST /config** - Updates configuration parameters
+- **/ws** - WebSocket endpoint for real-time telemetry streaming
 
 All HTTP responses from the worker include CORS headers (`Access-Control-Allow-Origin`, `Access-Control-Allow-Methods`, `Access-Control-Allow-Headers`). `OPTIONS` preflight requests return `204 No Content` with the appropriate headers.
