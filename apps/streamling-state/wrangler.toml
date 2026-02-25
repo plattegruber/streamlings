@@ -9,6 +9,9 @@ bindings = [{ name = "STREAMLING_STATE", class_name = "StreamlingState" }]
 tag = "v1"
 new_sqlite_classes = ["StreamlingState"]
 
+[vars]
+ALLOWED_ORIGIN = "http://localhost:5173"
+
 # Local dev ports:
 [dev]
 port = 8787

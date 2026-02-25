@@ -113,6 +113,69 @@ describe('Streamlings Worker', () => {
 		expect(resp.status).toBe(405);
 	});
 
+	describe('CORS headers', () => {
+		it('should return 204 with CORS headers for OPTIONS preflight', async () => {
+			const resp = await worker.fetch('http://localhost:8787/webhook', {
+				method: 'OPTIONS',
+			});
+
+			expect(resp.status).toBe(204);
+			expect(resp.headers.get('Access-Control-Allow-Origin')).toBe('http://localhost:5173');
+			expect(resp.headers.get('Access-Control-Allow-Methods')).toBe('GET, POST, OPTIONS');
+			expect(resp.headers.get('Access-Control-Allow-Headers')).toBe('Content-Type');
+		});
+
+		it('should return CORS headers on GET responses', async () => {
+			const resp = await worker.fetch('http://localhost:8787/webhook', {
+				method: 'GET',
+			});
+
+			expect(resp.status).toBe(200);
+			expect(resp.headers.get('Access-Control-Allow-Origin')).toBe('http://localhost:5173');
+			expect(resp.headers.get('Access-Control-Allow-Methods')).toBe('GET, POST, OPTIONS');
+			expect(resp.headers.get('Access-Control-Allow-Headers')).toBe('Content-Type');
+		});
+
+		it('should return CORS headers on POST responses', async () => {
+			const resp = await worker.fetch('http://localhost:8787/webhook', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ challenge: 'cors-test' }),
+			});
+
+			expect(resp.status).toBe(200);
+			expect(resp.headers.get('Access-Control-Allow-Origin')).toBe('http://localhost:5173');
+		});
+
+		it('should return CORS headers on error responses', async () => {
+			const resp = await worker.fetch('http://localhost:8787/nonexistent', {
+				method: 'GET',
+			});
+
+			expect(resp.status).toBe(404);
+			expect(resp.headers.get('Access-Control-Allow-Origin')).toBe('http://localhost:5173');
+		});
+
+		it('should return CORS headers on /telemetry endpoint', async () => {
+			const resp = await worker.fetch('http://localhost:8787/telemetry', {
+				method: 'GET',
+			});
+
+			expect(resp.status).toBe(200);
+			expect(resp.headers.get('Access-Control-Allow-Origin')).toBe('http://localhost:5173');
+			expect(resp.headers.get('Access-Control-Allow-Methods')).toBe('GET, POST, OPTIONS');
+		});
+
+		it('should handle OPTIONS preflight on any path', async () => {
+			const resp = await worker.fetch('http://localhost:8787/telemetry', {
+				method: 'OPTIONS',
+			});
+
+			expect(resp.status).toBe(204);
+			expect(resp.headers.get('Access-Control-Allow-Origin')).toBe('http://localhost:5173');
+		});
+	});
+
 	describe('WebSocket /ws endpoint', () => {
 		it('should return 426 for non-upgrade requests to /ws', async () => {
 			const resp = await worker.fetch('http://localhost:8787/ws', {

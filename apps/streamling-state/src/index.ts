@@ -349,9 +349,51 @@ export class StreamlingState extends DurableObject<Env> {
 	}
 }
 
+/**
+ * Build CORS headers for the given allowed origin.
+ */
+function corsHeaders(allowedOrigin: string): Record<string, string> {
+	return {
+		'Access-Control-Allow-Origin': allowedOrigin,
+		'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+		'Access-Control-Allow-Headers': 'Content-Type',
+	};
+}
+
+/**
+ * Clone a response with CORS headers appended.
+ * WebSocket upgrade responses (101) are returned as-is since
+ * browsers don't expose headers on upgrade responses.
+ */
+function withCors(response: Response, allowedOrigin: string): Response {
+	if (response.status === 101) {
+		return response;
+	}
+
+	const headers = new Headers(response.headers);
+	for (const [key, value] of Object.entries(corsHeaders(allowedOrigin))) {
+		headers.set(key, value);
+	}
+
+	return new Response(response.body, {
+		status: response.status,
+		statusText: response.statusText,
+		headers,
+	});
+}
+
 export default {
 	async fetch(request, env, ctx): Promise<Response> {
 		const url = new URL(request.url);
+		const allowedOrigin = env.ALLOWED_ORIGIN ?? 'http://localhost:5173';
+
+		// Handle CORS preflight requests
+		if (request.method === 'OPTIONS') {
+			return new Response(null, {
+				status: 204,
+				headers: corsHeaders(allowedOrigin),
+			});
+		}
 
 		// Get the StreamlingState Durable Object instance
 		const stub = env.STREAMLING_STATE.getByName("streamling");
@@ -359,27 +401,27 @@ export default {
 		// Route: GET /telemetry - get current energy/mood telemetry
 		if (url.pathname === '/telemetry' && request.method === 'GET') {
 			const telemetry = await stub.getTelemetry();
-			return new Response(JSON.stringify(telemetry, null, 2), {
+			return withCors(new Response(JSON.stringify(telemetry, null, 2), {
 				headers: { 'Content-Type': 'application/json' },
-			});
+			}), allowedOrigin);
 		}
 
 		// Route: GET /config - get current configuration
 		if (url.pathname === '/config' && request.method === 'GET') {
 			const config = await stub.getConfig();
-			return new Response(JSON.stringify(config, null, 2), {
+			return withCors(new Response(JSON.stringify(config, null, 2), {
 				headers: { 'Content-Type': 'application/json' },
-			});
+			}), allowedOrigin);
 		}
 
 		// Route: POST /config - update configuration
 		if (url.pathname === '/config' && request.method === 'POST') {
 			const config = await request.json() as any;
 			await stub.updateConfig(config);
-			return new Response(JSON.stringify({ success: true }), {
+			return withCors(new Response(JSON.stringify({ success: true }), {
 				status: 200,
 				headers: { 'Content-Type': 'application/json' },
-			});
+			}), allowedOrigin);
 		}
 
 		// Route: /ws - WebSocket telemetry stream (forwarded to Durable Object)
@@ -389,15 +431,15 @@ export default {
 
 		// Route: /webhook endpoint
 		if (url.pathname !== '/webhook') {
-			return new Response('Not Found', { status: 404 });
+			return withCors(new Response('Not Found', { status: 404 }), allowedOrigin);
 		}
 
 		// GET /webhook - return current counts
 		if (request.method === 'GET') {
 			const counts = await stub.getCounts();
-			return new Response(JSON.stringify(counts, null, 2), {
+			return withCors(new Response(JSON.stringify(counts, null, 2), {
 				headers: { 'Content-Type': 'application/json' },
-			});
+			}), allowedOrigin);
 		}
 
 		// POST /webhook - handle EventSub
@@ -407,9 +449,9 @@ export default {
 			// Handle EventSub verification challenge
 			if (body.challenge) {
 				console.log('✓ EventSub verification challenge received');
-				return new Response(body.challenge, {
+				return withCors(new Response(body.challenge, {
 					headers: { 'Content-Type': 'text/plain' },
-				});
+				}), allowedOrigin);
 			}
 
 			// Handle EventSub notification
@@ -426,15 +468,15 @@ export default {
 				console.table(counts);
 
 				// Return counts in response
-				return new Response(JSON.stringify(counts, null, 2), {
+				return withCors(new Response(JSON.stringify(counts, null, 2), {
 					status: 200,
 					headers: { 'Content-Type': 'application/json' },
-				});
+				}), allowedOrigin);
 			}
 
-			return new Response('Bad Request', { status: 400 });
+			return withCors(new Response('Bad Request', { status: 400 }), allowedOrigin);
 		}
 
-		return new Response('Method Not Allowed', { status: 405 });
+		return withCors(new Response('Method Not Allowed', { status: 405 }), allowedOrigin);
 	},
 } satisfies ExportedHandler<Env>;
