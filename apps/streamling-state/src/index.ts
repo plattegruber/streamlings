@@ -418,6 +418,19 @@ function withCors(response: Response, allowedOrigin: string): Response {
 	});
 }
 
+/**
+ * Extract a two-segment path: /<route>/<streamerId>
+ * Returns { route, streamerId } or null if the path doesn't match.
+ */
+function parseStreamerPath(pathname: string): { route: string; streamerId: string } | null {
+	// Strip leading slash and split: "/telemetry/abc" -> ["telemetry", "abc"]
+	const segments = pathname.replace(/^\//, '').split('/');
+	if (segments.length !== 2 || !segments[0] || !segments[1]) {
+		return null;
+	}
+	return { route: segments[0], streamerId: segments[1] };
+}
+
 export default {
 	async fetch(request, env, ctx): Promise<Response> {
 		const url = new URL(request.url);
@@ -431,66 +444,11 @@ export default {
 			});
 		}
 
-		// Get the StreamlingState Durable Object instance
-		const stub = env.STREAMLING_STATE.getByName("streamling");
-
-		// Route: GET /telemetry - get current energy/mood telemetry
-		if (url.pathname === '/telemetry' && request.method === 'GET') {
-			const telemetry = await stub.getTelemetry();
-			return withCors(new Response(JSON.stringify(telemetry, null, 2), {
-				headers: { 'Content-Type': 'application/json' },
-			}), allowedOrigin);
-		}
-
-		// Route: GET /config - get current configuration
-		if (url.pathname === '/config' && request.method === 'GET') {
-			const config = await stub.getConfig();
-			return withCors(new Response(JSON.stringify(config, null, 2), {
-				headers: { 'Content-Type': 'application/json' },
-			}), allowedOrigin);
-		}
-
-		// Route: POST /config - update configuration
-		if (url.pathname === '/config' && request.method === 'POST') {
-			const config = await request.json() as any;
-			await stub.updateConfig(config);
-			return withCors(new Response(JSON.stringify({ success: true }), {
-				status: 200,
-				headers: { 'Content-Type': 'application/json' },
-			}), allowedOrigin);
-		}
-
-		// Route: GET /events - recent events ring buffer
-		if (url.pathname === '/events' && request.method === 'GET') {
-			const events = await stub.getRecentEvents();
-			return new Response(JSON.stringify(events, null, 2), {
-				headers: { 'Content-Type': 'application/json' },
-			});
-		}
-
-		// Route: /ws - WebSocket telemetry stream (forwarded to Durable Object)
-		if (url.pathname === '/ws') {
-			return stub.fetch(request);
-		}
-
-		// Route: /webhook endpoint
-		if (url.pathname !== '/webhook') {
-			return withCors(new Response('Not Found', { status: 404 }), allowedOrigin);
-		}
-
-		// GET /webhook - return current counts
-		if (request.method === 'GET') {
-			const counts = await stub.getCounts();
-			return withCors(new Response(JSON.stringify(counts, null, 2), {
-				headers: { 'Content-Type': 'application/json' },
-			}), allowedOrigin);
-		}
-
-		// POST /webhook - handle EventSub
-		if (request.method === 'POST') {
+		// --- POST /webhook: streamer ID comes from the request body ---
+		if (url.pathname === '/webhook' && request.method === 'POST') {
 			const body = await request.json() as any;
 
-			// Handle EventSub verification challenge
+			// Handle EventSub verification challenge (no streamer ID needed)
 			if (body.challenge) {
 				console.log('✓ EventSub verification challenge received');
 				return withCors(new Response(body.challenge, {
@@ -502,6 +460,17 @@ export default {
 			if (body.subscription && body.subscription.type) {
 				const eventType = body.subscription.type;
 				const eventData = body.event || {};
+
+				// Extract streamer ID from forwarded event body
+				const streamerId = eventData.internal_user_id;
+				if (!streamerId) {
+					return withCors(new Response(
+						JSON.stringify({ error: 'Missing internal_user_id in event body' }),
+						{ status: 400, headers: { 'Content-Type': 'application/json' } },
+					), allowedOrigin);
+				}
+
+				const stub = env.STREAMLING_STATE.getByName(streamerId);
 
 				// Increment count in Durable Object with event data
 				await stub.incrementEvent(eventType, eventData);
@@ -521,6 +490,65 @@ export default {
 			return withCors(new Response('Bad Request', { status: 400 }), allowedOrigin);
 		}
 
-		return withCors(new Response('Method Not Allowed', { status: 405 }), allowedOrigin);
+		// --- All other routes require /<route>/<streamerId> ---
+		const parsed = parseStreamerPath(url.pathname);
+		if (!parsed) {
+			return withCors(new Response('Not Found', { status: 404 }), allowedOrigin);
+		}
+
+		const { route, streamerId } = parsed;
+		const stub = env.STREAMLING_STATE.getByName(streamerId);
+
+		// Route: GET /telemetry/:streamerId
+		if (route === 'telemetry' && request.method === 'GET') {
+			const telemetry = await stub.getTelemetry();
+			return withCors(new Response(JSON.stringify(telemetry, null, 2), {
+				headers: { 'Content-Type': 'application/json' },
+			}), allowedOrigin);
+		}
+
+		// Route: GET /config/:streamerId
+		if (route === 'config' && request.method === 'GET') {
+			const config = await stub.getConfig();
+			return withCors(new Response(JSON.stringify(config, null, 2), {
+				headers: { 'Content-Type': 'application/json' },
+			}), allowedOrigin);
+		}
+
+		// Route: POST /config/:streamerId
+		if (route === 'config' && request.method === 'POST') {
+			const config = await request.json() as any;
+			await stub.updateConfig(config);
+			return withCors(new Response(JSON.stringify({ success: true }), {
+				status: 200,
+				headers: { 'Content-Type': 'application/json' },
+			}), allowedOrigin);
+		}
+
+		// Route: GET /events/:streamerId
+		if (route === 'events' && request.method === 'GET') {
+			const events = await stub.getRecentEvents();
+			return withCors(new Response(JSON.stringify(events, null, 2), {
+				headers: { 'Content-Type': 'application/json' },
+			}), allowedOrigin);
+		}
+
+		// Route: GET /ws/:streamerId - WebSocket telemetry stream
+		if (route === 'ws') {
+			// Rewrite the URL so the DO sees /ws (without the streamerId segment)
+			const doUrl = new URL(request.url);
+			doUrl.pathname = '/ws';
+			return stub.fetch(new Request(doUrl.toString(), request));
+		}
+
+		// Route: GET /webhook/:streamerId - return current counts
+		if (route === 'webhook' && request.method === 'GET') {
+			const counts = await stub.getCounts();
+			return withCors(new Response(JSON.stringify(counts, null, 2), {
+				headers: { 'Content-Type': 'application/json' },
+			}), allowedOrigin);
+		}
+
+		return withCors(new Response('Not Found', { status: 404 }), allowedOrigin);
 	},
 } satisfies ExportedHandler<Env>;

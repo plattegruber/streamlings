@@ -120,16 +120,18 @@ You should see:
 
 ### Viewing Current Counts
 
-Query the StreamlingState worker directly:
+Query the StreamlingState worker directly (replace `STREAMER_ID` with the internal user ID):
 
 ```bash
-curl http://localhost:8787/webhook
+curl http://localhost:8787/webhook/STREAMER_ID
 ```
 
 ## User ID Mapping
 
 Currently uses simple prefix mapping:
 - Twitch user ID `12345` → Internal ID `internal_12345`
+
+The adapter injects `internal_user_id` into the forwarded event body. The streamling-state worker uses this field to route events to the correct per-streamer Durable Object instance.
 
 This will be enhanced to support:
 - Persistent ID mapping storage

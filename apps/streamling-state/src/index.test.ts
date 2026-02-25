@@ -10,6 +10,9 @@ import {
 } from './events';
 import type { EventRecord } from '@streamlings/shared/types';
 
+/** Default streamer ID used across most tests. */
+const STREAMER = 'test-streamer-1';
+
 describe('Streamlings Worker', () => {
 	let worker: Unstable_DevWorker;
 
@@ -23,8 +26,13 @@ describe('Streamlings Worker', () => {
 		await worker.stop();
 	});
 
-	it('should return 404 for non-webhook paths', async () => {
+	it('should return 404 for root path', async () => {
 		const resp = await worker.fetch('http://localhost:8787/');
+		expect(resp.status).toBe(404);
+	});
+
+	it('should return 404 for paths without a streamer ID', async () => {
+		const resp = await worker.fetch('http://localhost:8787/telemetry');
 		expect(resp.status).toBe(404);
 	});
 
@@ -41,9 +49,24 @@ describe('Streamlings Worker', () => {
 		expect(body).toBe(challengeValue);
 	});
 
+	it('should return 400 when POST /webhook event is missing internal_user_id', async () => {
+		const resp = await worker.fetch('http://localhost:8787/webhook', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({
+				subscription: { type: 'channel.follow' },
+				event: { user_id: '123' },
+			}),
+		});
+
+		expect(resp.status).toBe(400);
+		const body = await resp.json() as { error: string };
+		expect(body.error).toContain('internal_user_id');
+	});
+
 	it('should count events and return counts', async () => {
 		// Get initial counts
-		const initialResp = await worker.fetch('http://localhost:8787/webhook', {
+		const initialResp = await worker.fetch(`http://localhost:8787/webhook/${STREAMER}`, {
 			method: 'GET',
 		});
 		const initialCounts = await initialResp.json() as Record<string, number>;
@@ -56,7 +79,7 @@ describe('Streamlings Worker', () => {
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify({
 				subscription: { type: 'channel.follow' },
-				event: { user_id: '123' },
+				event: { user_id: '123', internal_user_id: STREAMER },
 			}),
 		});
 
@@ -70,7 +93,7 @@ describe('Streamlings Worker', () => {
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify({
 				subscription: { type: 'channel.follow' },
-				event: { user_id: '456' },
+				event: { user_id: '456', internal_user_id: STREAMER },
 			}),
 		});
 
@@ -83,7 +106,7 @@ describe('Streamlings Worker', () => {
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify({
 				subscription: { type: 'channel.cheer' },
-				event: { bits: 100 },
+				event: { bits: 100, internal_user_id: STREAMER },
 			}),
 		});
 
@@ -92,8 +115,8 @@ describe('Streamlings Worker', () => {
 		expect(cheerCounts['channel.cheer']).toBe(initialCheerCount + 1);
 	});
 
-	it('should return current counts via GET /webhook', async () => {
-		const resp = await worker.fetch('http://localhost:8787/webhook', {
+	it('should return current counts via GET /webhook/:streamerId', async () => {
+		const resp = await worker.fetch(`http://localhost:8787/webhook/${STREAMER}`, {
 			method: 'GET',
 		});
 
@@ -103,7 +126,7 @@ describe('Streamlings Worker', () => {
 		expect(counts).toHaveProperty('channel.cheer');
 	});
 
-	it('should return 400 for POST without subscription', async () => {
+	it('should return 400 for POST /webhook without subscription', async () => {
 		const resp = await worker.fetch('http://localhost:8787/webhook', {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
@@ -113,17 +136,102 @@ describe('Streamlings Worker', () => {
 		expect(resp.status).toBe(400);
 	});
 
-	it('should return 405 for unsupported methods', async () => {
-		const resp = await worker.fetch('http://localhost:8787/webhook', {
-			method: 'DELETE',
+	describe('Per-streamer isolation', () => {
+		const STREAMER_A = 'isolation-streamer-a';
+		const STREAMER_B = 'isolation-streamer-b';
+
+		it('should maintain independent state for different streamers', async () => {
+			// Capture baseline counts for both streamers
+			const baselineRespA = await worker.fetch(`http://localhost:8787/webhook/${STREAMER_A}`, { method: 'GET' });
+			const baselineA = await baselineRespA.json() as Record<string, number>;
+			const baseFollowA = baselineA['channel.follow'] || 0;
+
+			const baselineRespB = await worker.fetch(`http://localhost:8787/webhook/${STREAMER_B}`, { method: 'GET' });
+			const baselineB = await baselineRespB.json() as Record<string, number>;
+			const baseCheerB = baselineB['channel.cheer'] || 0;
+
+			// Send events to streamer A
+			await worker.fetch('http://localhost:8787/webhook', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					subscription: { type: 'channel.follow' },
+					event: { user_id: 'u1', internal_user_id: STREAMER_A },
+				}),
+			});
+
+			await worker.fetch('http://localhost:8787/webhook', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					subscription: { type: 'channel.follow' },
+					event: { user_id: 'u2', internal_user_id: STREAMER_A },
+				}),
+			});
+
+			// Send events to streamer B (different event type)
+			await worker.fetch('http://localhost:8787/webhook', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					subscription: { type: 'channel.cheer' },
+					event: { bits: 500, internal_user_id: STREAMER_B },
+				}),
+			});
+
+			// Verify streamer A got exactly 2 new follows and no new cheers
+			const respA = await worker.fetch(`http://localhost:8787/webhook/${STREAMER_A}`, {
+				method: 'GET',
+			});
+			const countsA = await respA.json() as Record<string, number>;
+			expect(countsA['channel.follow']).toBe(baseFollowA + 2);
+			expect(countsA['channel.cheer']).toBeUndefined();
+
+			// Verify streamer B got exactly 1 new cheer and no follows
+			const respB = await worker.fetch(`http://localhost:8787/webhook/${STREAMER_B}`, {
+				method: 'GET',
+			});
+			const countsB = await respB.json() as Record<string, number>;
+			expect(countsB['channel.cheer']).toBe(baseCheerB + 1);
+			expect(countsB['channel.follow']).toBeUndefined();
 		});
 
-		expect(resp.status).toBe(405);
+		it('should return independent telemetry for different streamers', async () => {
+			const respA = await worker.fetch(`http://localhost:8787/telemetry/${STREAMER_A}`, {
+				method: 'GET',
+			});
+			expect(respA.status).toBe(200);
+			const telemetryA = await respA.json() as Record<string, unknown>;
+			expect(telemetryA).toHaveProperty('energy');
+			expect(telemetryA).toHaveProperty('mood');
+
+			const respB = await worker.fetch(`http://localhost:8787/telemetry/${STREAMER_B}`, {
+				method: 'GET',
+			});
+			expect(respB.status).toBe(200);
+			const telemetryB = await respB.json() as Record<string, unknown>;
+			expect(telemetryB).toHaveProperty('energy');
+			expect(telemetryB).toHaveProperty('mood');
+		});
+
+		it('should return independent events for different streamers', async () => {
+			const respA = await worker.fetch(`http://localhost:8787/events/${STREAMER_A}`, {
+				method: 'GET',
+			});
+			const eventsA = await respA.json() as EventRecord[];
+			expect(eventsA.every((e) => e.eventType === 'channel.follow')).toBe(true);
+
+			const respB = await worker.fetch(`http://localhost:8787/events/${STREAMER_B}`, {
+				method: 'GET',
+			});
+			const eventsB = await respB.json() as EventRecord[];
+			expect(eventsB.every((e) => e.eventType === 'channel.cheer')).toBe(true);
+		});
 	});
 
 	describe('CORS headers', () => {
 		it('should return 204 with CORS headers for OPTIONS preflight', async () => {
-			const resp = await worker.fetch('http://localhost:8787/webhook', {
+			const resp = await worker.fetch(`http://localhost:8787/webhook/${STREAMER}`, {
 				method: 'OPTIONS',
 			});
 
@@ -134,7 +242,7 @@ describe('Streamlings Worker', () => {
 		});
 
 		it('should return CORS headers on GET responses', async () => {
-			const resp = await worker.fetch('http://localhost:8787/webhook', {
+			const resp = await worker.fetch(`http://localhost:8787/webhook/${STREAMER}`, {
 				method: 'GET',
 			});
 
@@ -164,8 +272,8 @@ describe('Streamlings Worker', () => {
 			expect(resp.headers.get('Access-Control-Allow-Origin')).toBe('http://localhost:5173');
 		});
 
-		it('should return CORS headers on /telemetry endpoint', async () => {
-			const resp = await worker.fetch('http://localhost:8787/telemetry', {
+		it('should return CORS headers on /telemetry/:streamerId endpoint', async () => {
+			const resp = await worker.fetch(`http://localhost:8787/telemetry/${STREAMER}`, {
 				method: 'GET',
 			});
 
@@ -175,7 +283,7 @@ describe('Streamlings Worker', () => {
 		});
 
 		it('should handle OPTIONS preflight on any path', async () => {
-			const resp = await worker.fetch('http://localhost:8787/telemetry', {
+			const resp = await worker.fetch(`http://localhost:8787/telemetry/${STREAMER}`, {
 				method: 'OPTIONS',
 			});
 
@@ -184,16 +292,16 @@ describe('Streamlings Worker', () => {
 		});
 	});
 
-	describe('WebSocket /ws endpoint', () => {
-		it('should return 426 for non-upgrade requests to /ws', async () => {
-			const resp = await worker.fetch('http://localhost:8787/ws', {
+	describe('WebSocket /ws/:streamerId endpoint', () => {
+		it('should return 426 for non-upgrade requests to /ws/:streamerId', async () => {
+			const resp = await worker.fetch(`http://localhost:8787/ws/${STREAMER}`, {
 				method: 'GET',
 			});
 			expect(resp.status).toBe(426);
 		});
 
 		it('should accept WebSocket upgrade and receive telemetry', async () => {
-			const ws = new WebSocket(`ws://${worker.address}:${worker.port}/ws`);
+			const ws = new WebSocket(`ws://${worker.address}:${worker.port}/ws/${STREAMER}`);
 
 			try {
 				// Wait for connection to open
@@ -223,8 +331,8 @@ describe('Streamlings Worker', () => {
 		}, 45_000);
 
 		it('should support multiple concurrent WebSocket connections', async () => {
-			const ws1 = new WebSocket(`ws://${worker.address}:${worker.port}/ws`);
-			const ws2 = new WebSocket(`ws://${worker.address}:${worker.port}/ws`);
+			const ws1 = new WebSocket(`ws://${worker.address}:${worker.port}/ws/${STREAMER}`);
+			const ws2 = new WebSocket(`ws://${worker.address}:${worker.port}/ws/${STREAMER}`);
 
 			try {
 				// Wait for both to connect
@@ -272,9 +380,9 @@ describe('Streamlings Worker', () => {
 		}, 45_000);
 	});
 
-	describe('GET /events - recent events ring buffer', () => {
+	describe('GET /events/:streamerId - recent events ring buffer', () => {
 		it('should return events as JSON array', async () => {
-			const resp = await worker.fetch('http://localhost:8787/events', {
+			const resp = await worker.fetch(`http://localhost:8787/events/${STREAMER}`, {
 				method: 'GET',
 			});
 			expect(resp.status).toBe(200);
@@ -290,11 +398,11 @@ describe('Streamlings Worker', () => {
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
 					subscription: { type: 'channel.chat.message' },
-					event: { user_id: 'u1', user_name: 'testuser', message: { text: 'hello' } },
+					event: { user_id: 'u1', user_name: 'testuser', message: { text: 'hello' }, internal_user_id: STREAMER },
 				}),
 			});
 
-			const resp = await worker.fetch('http://localhost:8787/events', {
+			const resp = await worker.fetch(`http://localhost:8787/events/${STREAMER}`, {
 				method: 'GET',
 			});
 			const events = await resp.json() as EventRecord[];
@@ -319,7 +427,7 @@ describe('Streamlings Worker', () => {
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
 					subscription: { type: 'channel.subscribe' },
-					event: { user_id: 'order1', user_name: 'first', tier: '1000' },
+					event: { user_id: 'order1', user_name: 'first', tier: '1000', internal_user_id: STREAMER },
 				}),
 			});
 
@@ -328,11 +436,11 @@ describe('Streamlings Worker', () => {
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
 					subscription: { type: 'channel.subscribe' },
-					event: { user_id: 'order2', user_name: 'second', tier: '1000' },
+					event: { user_id: 'order2', user_name: 'second', tier: '1000', internal_user_id: STREAMER },
 				}),
 			});
 
-			const resp = await worker.fetch('http://localhost:8787/events', {
+			const resp = await worker.fetch(`http://localhost:8787/events/${STREAMER}`, {
 				method: 'GET',
 			});
 			const events = await resp.json() as EventRecord[];
@@ -354,11 +462,11 @@ describe('Streamlings Worker', () => {
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
 					subscription: { type: 'channel.cheer' },
-					event: { user_id: 'cheerer1', user_name: 'BigSpender', bits: 500 },
+					event: { user_id: 'cheerer1', user_name: 'BigSpender', bits: 500, internal_user_id: STREAMER },
 				}),
 			});
 
-			const resp = await worker.fetch('http://localhost:8787/events', {
+			const resp = await worker.fetch(`http://localhost:8787/events/${STREAMER}`, {
 				method: 'GET',
 			});
 			const events = await resp.json() as EventRecord[];
@@ -375,6 +483,9 @@ describe('Streamlings Worker', () => {
 		});
 
 		it('should not grow beyond MAX_RECENT_EVENTS', async () => {
+			// Use a dedicated streamer to avoid interference from other tests
+			const overflowStreamer = 'overflow-streamer';
+
 			// Send MAX_RECENT_EVENTS + 10 events
 			const totalToSend = MAX_RECENT_EVENTS + 10;
 			const promises = [];
@@ -385,14 +496,14 @@ describe('Streamlings Worker', () => {
 						headers: { 'Content-Type': 'application/json' },
 						body: JSON.stringify({
 							subscription: { type: 'channel.chat.message' },
-							event: { user_id: `overflow-${i}`, user_name: `user${i}` },
+							event: { user_id: `overflow-${i}`, user_name: `user${i}`, internal_user_id: overflowStreamer },
 						}),
 					}),
 				);
 			}
 			await Promise.all(promises);
 
-			const resp = await worker.fetch('http://localhost:8787/events', {
+			const resp = await worker.fetch(`http://localhost:8787/events/${overflowStreamer}`, {
 				method: 'GET',
 			});
 			const events = await resp.json() as EventRecord[];

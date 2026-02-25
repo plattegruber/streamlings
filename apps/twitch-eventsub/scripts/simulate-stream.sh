@@ -30,7 +30,12 @@ while [[ $# -gt 0 ]]; do
 done
 
 ADAPTER_URL="http://localhost:8788/webhook"
-TELEMETRY_URL="http://localhost:8787/telemetry"
+# The streamling-state worker routes to per-streamer Durable Objects using
+# the internal_user_id from the event body.  The adapter maps Twitch user
+# IDs using the pattern "internal_<twitch_user_id>".  For the final
+# telemetry check we pick the first user from the pool (set after pool
+# generation below).
+WORKER_BASE_URL="http://localhost:8787"
 
 # ---------------------------------------------------------------------------
 # Generate a pool of "regular" user IDs
@@ -39,6 +44,10 @@ USER_POOL=()
 for i in $(seq 1 20); do
   USER_POOL+=("$((100000 + RANDOM % 900000))")
 done
+
+# Use the first user's internal ID for the telemetry check at the end.
+TELEMETRY_STREAMER_ID="internal_${USER_POOL[0]}"
+TELEMETRY_URL="${WORKER_BASE_URL}/telemetry/${TELEMETRY_STREAMER_ID}"
 
 # ---------------------------------------------------------------------------
 # Helpers
