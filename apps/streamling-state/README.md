@@ -58,8 +58,18 @@ Query the current event counts:
 curl http://localhost:8787/webhook
 ```
 
+## Environment Variables
+
+| Variable | Description | Default |
+|---|---|---|
+| `ALLOWED_ORIGIN` | Origin allowed for CORS requests (e.g. the web app URL) | `http://localhost:5173` |
+
+Set in `wrangler.toml` under `[vars]` for local development. For production, set via `wrangler secret put ALLOWED_ORIGIN --env prod` or in the `[env.prod.vars]` section.
+
 ## Architecture
 
 - **StreamlingState** - Durable Object that tracks event counts
 - **/webhook** - POST endpoint that receives Twitch EventSub notifications
 - **GET /webhook** - Returns current event counts as JSON
+
+All HTTP responses from the worker include CORS headers (`Access-Control-Allow-Origin`, `Access-Control-Allow-Methods`, `Access-Control-Allow-Headers`). `OPTIONS` preflight requests return `204 No Content` with the appropriate headers.
