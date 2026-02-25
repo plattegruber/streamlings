@@ -54,10 +54,10 @@ pnpm test:e2e
 
 The test suite is split into two Vitest projects (configured in `vite.config.js`):
 
-| Project    | Pattern                              | Environment | Purpose                                    |
-|------------|--------------------------------------|-------------|--------------------------------------------|
-| **client** | `src/**/*.svelte.{test,spec}.{js,ts}` | browser     | Svelte component rendering tests           |
-| **server** | `src/**/*.{test,spec}.{js,ts}`        | node        | Server-side logic, database schema tests   |
+| Project    | Pattern                               | Environment | Purpose                                  |
+| ---------- | ------------------------------------- | ----------- | ---------------------------------------- |
+| **client** | `src/**/*.svelte.{test,spec}.{js,ts}` | browser     | Svelte component rendering tests         |
+| **server** | `src/**/*.{test,spec}.{js,ts}`        | node        | Server-side logic, database schema tests |
 
 Playwright e2e tests live in the `e2e/` directory and run against a built preview server.
 
@@ -74,10 +74,10 @@ import { render } from 'vitest-browser-svelte';
 import MyWidget from './MyWidget.svelte';
 
 describe('MyWidget', () => {
-  it('renders the greeting', async () => {
-    render(MyWidget, { name: 'World' });
-    await expect.element(page.getByText('Hello, World')).toBeInTheDocument();
-  });
+	it('renders the greeting', async () => {
+		render(MyWidget, { name: 'World' });
+		await expect.element(page.getByText('Hello, World')).toBeInTheDocument();
+	});
 });
 ```
 
@@ -96,6 +96,44 @@ const tel = mockTelemetry({ mood: { currentState: 'partying' } });
 ```
 
 Use this helper in component tests and future dashboard integration tests to avoid duplicating telemetry fixtures.
+
+## Stream Overlay
+
+The stream overlay renders a live animated Streamling as an OBS browser source. It connects to the streamling-state worker via WebSocket for real-time mood updates.
+
+### URL Pattern
+
+```
+/overlay/{streamerId}
+```
+
+Replace `{streamerId}` with the streamer's internal ID.
+
+### OBS Setup
+
+1. In OBS, add a new **Browser Source**
+2. Set the URL to your deployed app's overlay URL (e.g., `https://your-app.pages.dev/overlay/your-streamer-id`)
+3. Set dimensions to **300x300** (the Streamling scales within the container)
+4. The transparent background works out of the box -- no custom CSS needed in OBS
+
+### How It Works
+
+- Connects via WebSocket to `ws://{workerUrl}/ws/{streamerId}` for real-time telemetry
+- Falls back to HTTP polling (`/telemetry/{streamerId}`) if WebSocket fails
+- Auto-reconnects on disconnect
+- Renders a CSS-animated blob that changes appearance based on the current mood state:
+  - **Sleeping**: Indigo/purple, gentle breathing animation, floating Zzz particles
+  - **Idle**: Soft gray/blue, subtle sway animation
+  - **Engaged**: Warm amber/yellow, bouncing animation
+  - **Partying**: Vibrant pink/magenta, energetic dance animation, sparkle effects
+
+### Local Development
+
+Start the streamling-state worker and the web app, then visit:
+
+```
+http://localhost:5173/overlay/test-streamer
+```
 
 ## Database
 
@@ -122,6 +160,7 @@ The app automatically deploys to Cloudflare Pages when changes are pushed to the
 ### Setup Cloudflare Pages Project
 
 1. **Create D1 Database:**
+
    ```sh
    # Create production database
    wrangler d1 create streamlings-db
@@ -133,6 +172,7 @@ The app automatically deploys to Cloudflare Pages when changes are pushed to the
 2. **Update wrangler.toml** with the database IDs returned from the commands above
 
 3. **Run migrations on D1:**
+
    ```sh
    # For production
    wrangler d1 execute streamlings-db --remote --file=drizzle/migrations/xxxx.sql
@@ -146,6 +186,7 @@ The app automatically deploys to Cloudflare Pages when changes are pushed to the
    - Add the following variables:
 
 **Production & Preview:**
+
 - `CLERK_PUBLISHABLE_KEY`: Your Clerk publishable key
 - `CLERK_SECRET_KEY`: Your Clerk secret key (encrypted)
 - `DATABASE_URL`: Will be automatically bound from D1 (no manual config needed)
@@ -153,6 +194,7 @@ The app automatically deploys to Cloudflare Pages when changes are pushed to the
 ### GitHub Secrets Required
 
 Ensure these secrets are set in your GitHub repository:
+
 - `CLOUDFLARE_API_TOKEN`: API token with Pages write access
 - `CLOUDFLARE_ACCOUNT_ID`: Your Cloudflare account ID
 
@@ -165,6 +207,7 @@ cp .env.example .env
 ```
 
 Required variables:
+
 - `DATABASE_URL`: Database connection string (local: `file:local.db`)
 - `CLERK_PUBLISHABLE_KEY`: Clerk publishable key
 - `CLERK_SECRET_KEY`: Clerk secret key
