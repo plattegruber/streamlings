@@ -8,11 +8,12 @@
 	import TimeInState from '$lib/components/TimeInState.svelte';
 	import InternalDrives from '$lib/components/InternalDrives.svelte';
 	import ActivityFeed from '$lib/components/ActivityFeed.svelte';
+	import TwitchConnection from '$lib/components/TwitchConnection.svelte';
 
 	const ctx = useClerkContext();
 	const user = $derived(ctx.user);
 
-	/** @type {{ data: { workerUrl: string, streamerId: string } }} */
+	/** @type {{ data: { workerUrl: string, streamerId: string, twitchConnection: { connected: boolean, twitchUsername: string|null } } }} */
 	let { data } = $props();
 
 	const poller = createTelemetryPoller(data.workerUrl);
@@ -59,6 +60,13 @@
 						Sign Out
 					</button>
 				</SignOutButton>
+			</div>
+
+			<div class="mb-6">
+				<TwitchConnection
+					connected={data.twitchConnection.connected}
+					twitchUsername={data.twitchConnection.twitchUsername}
+				/>
 			</div>
 		{/if}
 
