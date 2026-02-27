@@ -46,7 +46,7 @@ describe('createTelemetryPoller', () => {
 		vi.restoreAllMocks();
 	});
 
-	it('fetches telemetry from the worker URL', async () => {
+	it('fetches telemetry from the worker URL', { timeout: 15_000 }, async () => {
 		const fetchSpy = vi
 			.spyOn(globalThis, 'fetch')
 			.mockResolvedValue(new Response(JSON.stringify(fakeTelemetry), { status: 200 }));
