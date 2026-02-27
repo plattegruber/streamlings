@@ -55,6 +55,7 @@
 	},
 	"dependencies": {
 		"@clerk/backend": "^2.19.0",
+		"@streamlings/shared": "workspace:*",
 		"svelte-clerk": "^0.17.6"
 	}
 }

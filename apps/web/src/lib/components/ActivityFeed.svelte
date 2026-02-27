@@ -1,13 +1,13 @@
 <script>
 	/**
 	 * @type {{
-	 *   events: import('@streamlings/shared/types').EventRecord[]
+	 *   items: import('@streamlings/shared/types').EventRecord[]
 	 * }}
 	 */
-	let { events } = $props();
+	let { items } = $props();
 
 	/** Events sorted newest-first */
-	const sorted = $derived([...events].sort((a, b) => b.timestamp - a.timestamp));
+	const sorted = $derived([...items].sort((a, b) => b.timestamp - a.timestamp));
 
 	/**
 	 * Format a timestamp as a relative time string ("2s ago", "1m ago", "3h ago").
