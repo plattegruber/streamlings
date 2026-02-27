@@ -120,14 +120,12 @@ describe('TwitchConnection', () => {
 		});
 
 		it('shows an error message when the sync fails', async () => {
-			const fetchSpy = vi
-				.spyOn(globalThis, 'fetch')
-				.mockResolvedValueOnce(
-					new Response(JSON.stringify({ message: 'No Twitch account linked' }), {
-						status: 400,
-						headers: { 'Content-Type': 'application/json' }
-					})
-				);
+			const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+				new Response(JSON.stringify({ message: 'No Twitch account linked' }), {
+					status: 400,
+					headers: { 'Content-Type': 'application/json' }
+				})
+			);
 
 			render(TwitchConnection, {
 				connected: false,

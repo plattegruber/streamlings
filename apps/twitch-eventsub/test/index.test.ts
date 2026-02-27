@@ -32,7 +32,7 @@ async function makeSignedRequest(
 		timestamp?: string;
 		signature?: string;
 	},
-): Promise<Request> {
+): Promise<Request<unknown, IncomingRequestCfProperties>> {
 	const messageId = options?.messageId ?? 'test-msg-id';
 	const timestamp = options?.timestamp ?? new Date().toISOString();
 	const secret = options?.secret ?? WEBHOOK_SECRET;
@@ -53,7 +53,7 @@ async function makeSignedRequest(
 			'Twitch-Eventsub-Message-Signature': signature,
 		},
 		body,
-	});
+	}) as Request<unknown, IncomingRequestCfProperties>;
 }
 
 describe('Webhook signature verification integration', () => {
@@ -119,7 +119,7 @@ describe('Webhook signature verification integration', () => {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
 			body,
-		});
+		}) as Request<unknown, IncomingRequestCfProperties>;
 
 		const resp = await worker.fetch(req, envWithSecret, ctx);
 
@@ -142,7 +142,7 @@ describe('Webhook signature verification integration', () => {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
 			body,
-		});
+		}) as Request<unknown, IncomingRequestCfProperties>;
 
 		const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 		const resp = await worker.fetch(req, envWithoutSecret, ctx);

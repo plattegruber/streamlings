@@ -113,7 +113,7 @@ export function createWebSocketTelemetry(workerUrl, streamerId) {
 			try {
 				data = JSON.parse(/** @type {string} */ (event.data));
 				error = null;
-			} catch (e) {
+			} catch {
 				// Ignore non-JSON messages (e.g. pong responses)
 			}
 		});

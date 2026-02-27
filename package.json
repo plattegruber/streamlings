@@ -17,7 +17,10 @@
     "onlyBuiltDependencies": [
       "esbuild",
       "@tailwindcss/oxide",
-      "better-sqlite3"
+      "better-sqlite3",
+      "workerd",
+      "sharp",
+      "@clerk/shared"
     ]
   }
 }

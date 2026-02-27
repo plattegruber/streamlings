@@ -5,8 +5,8 @@ import worker from './index';
 const mockFetch = vi.fn();
 vi.stubGlobal('fetch', mockFetch);
 
-function makeRequest(path: string, init?: RequestInit): Request {
-	return new Request(`http://localhost${path}`, init);
+function makeRequest(path: string, init?: RequestInit) {
+	return new Request(`http://localhost${path}`, init) as Request<unknown, IncomingRequestCfProperties>;
 }
 
 // Env and ExecutionContext are Cloudflare Worker globals (not in tsconfig types)

@@ -149,7 +149,7 @@
 						bind:value={messageWeight}
 						class="w-full"
 					/>
-					<span class="w-12 text-right text-sm tabular-nums text-gray-700"
+					<span class="w-12 text-right text-sm text-gray-700 tabular-nums"
 						>{messageWeight.toFixed(1)}</span
 					>
 				</div>
@@ -172,7 +172,7 @@
 						bind:value={chatterWeight}
 						class="w-full"
 					/>
-					<span class="w-12 text-right text-sm tabular-nums text-gray-700"
+					<span class="w-12 text-right text-sm text-gray-700 tabular-nums"
 						>{chatterWeight.toFixed(1)}</span
 					>
 				</div>
@@ -181,9 +181,7 @@
 			<label class="flex flex-col gap-1">
 				<div class="flex items-center justify-between">
 					<span class="text-sm font-medium text-gray-700">High-Value Event Weight</span>
-					<span class="text-xs text-gray-400"
-						>default: {defaults.energy.highValueWeight}</span
-					>
+					<span class="text-xs text-gray-400">default: {defaults.energy.highValueWeight}</span>
 				</div>
 				<p class="text-xs text-gray-500">
 					How much subs, bits, and donations contribute to the activity signal.
@@ -197,7 +195,7 @@
 						bind:value={highValueWeight}
 						class="w-full"
 					/>
-					<span class="w-12 text-right text-sm tabular-nums text-gray-700"
+					<span class="w-12 text-right text-sm text-gray-700 tabular-nums"
 						>{highValueWeight.toFixed(1)}</span
 					>
 				</div>
@@ -206,13 +204,11 @@
 			<label class="flex flex-col gap-1">
 				<div class="flex items-center justify-between">
 					<span class="text-sm font-medium text-gray-700">Baseline Smoothing</span>
-					<span class="text-xs text-gray-400"
-						>default: {defaults.energy.baselineAlpha}</span
-					>
+					<span class="text-xs text-gray-400">default: {defaults.energy.baselineAlpha}</span>
 				</div>
 				<p class="text-xs text-gray-500">
-					EMA alpha for the rolling baseline. Lower values mean slower adaptation to new
-					activity levels.
+					EMA alpha for the rolling baseline. Lower values mean slower adaptation to new activity
+					levels.
 				</p>
 				<div class="flex items-center gap-3">
 					<input
@@ -223,7 +219,7 @@
 						bind:value={baselineAlpha}
 						class="w-full"
 					/>
-					<span class="w-12 text-right text-sm tabular-nums text-gray-700"
+					<span class="w-12 text-right text-sm text-gray-700 tabular-nums"
 						>{baselineAlpha.toFixed(2)}</span
 					>
 				</div>
@@ -246,7 +242,7 @@
 						bind:value={energyAlpha}
 						class="w-full"
 					/>
-					<span class="w-12 text-right text-sm tabular-nums text-gray-700"
+					<span class="w-12 text-right text-sm text-gray-700 tabular-nums"
 						>{energyAlpha.toFixed(2)}</span
 					>
 				</div>
@@ -258,8 +254,8 @@
 	<section data-testid="mood-transitions">
 		<h3 class="mb-4 text-lg font-semibold text-gray-900">Mood Transitions</h3>
 		<p class="mb-4 text-sm text-gray-500">
-			Energy thresholds and hold times that control when the streamling changes mood. Hold
-			times are in seconds.
+			Energy thresholds and hold times that control when the streamling changes mood. Hold times are
+			in seconds.
 		</p>
 		<div class="flex flex-col gap-5">
 			<!-- Sleeping -> Idle -->
@@ -273,9 +269,7 @@
 							>default: {defaults.moodTransition.sleepToIdleEnergyThreshold}</span
 						>
 					</div>
-					<p class="text-xs text-gray-500">
-						Energy level that can wake the streamling from sleep.
-					</p>
+					<p class="text-xs text-gray-500">Energy level that can wake the streamling from sleep.</p>
 					<div class="flex items-center gap-3">
 						<input
 							type="range"
@@ -285,7 +279,7 @@
 							bind:value={sleepToIdleThreshold}
 							class="w-full"
 						/>
-						<span class="w-12 text-right text-sm tabular-nums text-gray-700"
+						<span class="w-12 text-right text-sm text-gray-700 tabular-nums"
 							>{sleepToIdleThreshold.toFixed(1)}</span
 						>
 					</div>
@@ -310,7 +304,7 @@
 							bind:value={sleepToIdleHoldTime}
 							class="w-full"
 						/>
-						<span class="w-12 text-right text-sm tabular-nums text-gray-700"
+						<span class="w-12 text-right text-sm text-gray-700 tabular-nums"
 							>{sleepToIdleHoldTime}s</span
 						>
 					</div>
@@ -318,9 +312,7 @@
 
 				<label class="flex flex-col gap-1">
 					<div class="flex items-center justify-between">
-						<span class="text-sm font-medium text-gray-700"
-							>Minimum Sleep Duration (seconds)</span
-						>
+						<span class="text-sm font-medium text-gray-700">Minimum Sleep Duration (seconds)</span>
 						<span class="text-xs text-gray-400"
 							>default: {defaults.moodTransition.sleepToIdleMinDuration}s</span
 						>
@@ -337,7 +329,7 @@
 							bind:value={sleepToIdleMinDuration}
 							class="w-full"
 						/>
-						<span class="w-14 text-right text-sm tabular-nums text-gray-700"
+						<span class="w-14 text-right text-sm text-gray-700 tabular-nums"
 							>{sleepToIdleMinDuration}s</span
 						>
 					</div>
@@ -367,7 +359,7 @@
 							bind:value={idleToEngagedThreshold}
 							class="w-full"
 						/>
-						<span class="w-12 text-right text-sm tabular-nums text-gray-700"
+						<span class="w-12 text-right text-sm text-gray-700 tabular-nums"
 							>{idleToEngagedThreshold.toFixed(1)}</span
 						>
 					</div>
@@ -392,7 +384,7 @@
 							bind:value={idleToEngagedHoldTime}
 							class="w-full"
 						/>
-						<span class="w-12 text-right text-sm tabular-nums text-gray-700"
+						<span class="w-12 text-right text-sm text-gray-700 tabular-nums"
 							>{idleToEngagedHoldTime}s</span
 						>
 					</div>
@@ -410,9 +402,7 @@
 							>default: {defaults.moodTransition.engagedToPartyingEnergyThreshold}</span
 						>
 					</div>
-					<p class="text-xs text-gray-500">
-						Energy level needed to start partying.
-					</p>
+					<p class="text-xs text-gray-500">Energy level needed to start partying.</p>
 					<div class="flex items-center gap-3">
 						<input
 							type="range"
@@ -422,7 +412,7 @@
 							bind:value={engagedToPartyingThreshold}
 							class="w-full"
 						/>
-						<span class="w-12 text-right text-sm tabular-nums text-gray-700"
+						<span class="w-12 text-right text-sm text-gray-700 tabular-nums"
 							>{engagedToPartyingThreshold.toFixed(1)}</span
 						>
 					</div>
@@ -447,7 +437,7 @@
 							bind:value={engagedToPartyingHoldTime}
 							class="w-full"
 						/>
-						<span class="w-12 text-right text-sm tabular-nums text-gray-700"
+						<span class="w-12 text-right text-sm text-gray-700 tabular-nums"
 							>{engagedToPartyingHoldTime}s</span
 						>
 					</div>
@@ -477,7 +467,7 @@
 							bind:value={partyingToEngagedThreshold}
 							class="w-full"
 						/>
-						<span class="w-12 text-right text-sm tabular-nums text-gray-700"
+						<span class="w-12 text-right text-sm text-gray-700 tabular-nums"
 							>{partyingToEngagedThreshold.toFixed(1)}</span
 						>
 					</div>
@@ -502,7 +492,7 @@
 							bind:value={partyingToEngagedHoldTime}
 							class="w-full"
 						/>
-						<span class="w-12 text-right text-sm tabular-nums text-gray-700"
+						<span class="w-12 text-right text-sm text-gray-700 tabular-nums"
 							>{partyingToEngagedHoldTime}s</span
 						>
 					</div>
@@ -510,9 +500,7 @@
 
 				<label class="flex flex-col gap-1">
 					<div class="flex items-center justify-between">
-						<span class="text-sm font-medium text-gray-700"
-							>Max Party Duration (seconds)</span
-						>
+						<span class="text-sm font-medium text-gray-700">Max Party Duration (seconds)</span>
 						<span class="text-xs text-gray-400"
 							>default: {defaults.moodTransition.partyingToEngagedMaxDuration}s</span
 						>
@@ -529,7 +517,7 @@
 							bind:value={partyingToEngagedMaxDuration}
 							class="w-full"
 						/>
-						<span class="w-14 text-right text-sm tabular-nums text-gray-700"
+						<span class="w-14 text-right text-sm text-gray-700 tabular-nums"
 							>{partyingToEngagedMaxDuration}s</span
 						>
 					</div>
@@ -559,7 +547,7 @@
 							bind:value={engagedToIdleThreshold}
 							class="w-full"
 						/>
-						<span class="w-12 text-right text-sm tabular-nums text-gray-700"
+						<span class="w-12 text-right text-sm text-gray-700 tabular-nums"
 							>{engagedToIdleThreshold.toFixed(1)}</span
 						>
 					</div>
@@ -584,7 +572,7 @@
 							bind:value={engagedToIdleHoldTime}
 							class="w-full"
 						/>
-						<span class="w-12 text-right text-sm tabular-nums text-gray-700"
+						<span class="w-12 text-right text-sm text-gray-700 tabular-nums"
 							>{engagedToIdleHoldTime}s</span
 						>
 					</div>
@@ -602,9 +590,7 @@
 							>default: {defaults.moodTransition.idleToSleepingEnergyThreshold}</span
 						>
 					</div>
-					<p class="text-xs text-gray-500">
-						Energy level below which the streamling falls asleep.
-					</p>
+					<p class="text-xs text-gray-500">Energy level below which the streamling falls asleep.</p>
 					<div class="flex items-center gap-3">
 						<input
 							type="range"
@@ -614,7 +600,7 @@
 							bind:value={idleToSleepingThreshold}
 							class="w-full"
 						/>
-						<span class="w-12 text-right text-sm tabular-nums text-gray-700"
+						<span class="w-12 text-right text-sm text-gray-700 tabular-nums"
 							>{idleToSleepingThreshold.toFixed(1)}</span
 						>
 					</div>
@@ -639,7 +625,7 @@
 							bind:value={idleToSleepingHoldTime}
 							class="w-full"
 						/>
-						<span class="w-14 text-right text-sm tabular-nums text-gray-700"
+						<span class="w-14 text-right text-sm text-gray-700 tabular-nums"
 							>{idleToSleepingHoldTime}s</span
 						>
 					</div>
@@ -652,15 +638,15 @@
 	<section data-testid="internal-drives-settings">
 		<h3 class="mb-4 text-lg font-semibold text-gray-900">Internal Drives</h3>
 		<p class="mb-4 text-sm text-gray-500">
-			Autonomous drive rates that accumulate over time and can force mood transitions
-			independently of chat activity.
+			Autonomous drive rates that accumulate over time and can force mood transitions independently
+			of chat activity.
 		</p>
 		<div class="flex flex-col gap-5">
 			<div class="rounded-md border border-gray-200 p-4">
 				<h4 class="mb-3 text-sm font-semibold text-gray-800">Drive Rates</h4>
 				<p class="mb-3 text-xs text-gray-500">
-					How quickly each drive accumulates per tick. Lower values produce slower, more
-					gradual changes.
+					How quickly each drive accumulates per tick. Lower values produce slower, more gradual
+					changes.
 				</p>
 
 				<label class="mb-3 flex flex-col gap-1">
@@ -682,7 +668,7 @@
 							bind:value={sleepPressureRate}
 							class="w-full"
 						/>
-						<span class="w-16 text-right text-sm tabular-nums text-gray-700"
+						<span class="w-16 text-right text-sm text-gray-700 tabular-nums"
 							>{sleepPressureRate.toFixed(4)}</span
 						>
 					</div>
@@ -707,7 +693,7 @@
 							bind:value={restednessRate}
 							class="w-full"
 						/>
-						<span class="w-16 text-right text-sm tabular-nums text-gray-700"
+						<span class="w-16 text-right text-sm text-gray-700 tabular-nums"
 							>{restednessRate.toFixed(4)}</span
 						>
 					</div>
@@ -732,7 +718,7 @@
 							bind:value={exhaustionRate}
 							class="w-full"
 						/>
-						<span class="w-16 text-right text-sm tabular-nums text-gray-700"
+						<span class="w-16 text-right text-sm text-gray-700 tabular-nums"
 							>{exhaustionRate.toFixed(3)}</span
 						>
 					</div>
@@ -757,7 +743,7 @@
 							bind:value={curiosityRate}
 							class="w-full"
 						/>
-						<span class="w-16 text-right text-sm tabular-nums text-gray-700"
+						<span class="w-16 text-right text-sm text-gray-700 tabular-nums"
 							>{curiosityRate.toFixed(4)}</span
 						>
 					</div>
@@ -767,8 +753,8 @@
 			<div class="rounded-md border border-gray-200 p-4">
 				<h4 class="mb-3 text-sm font-semibold text-gray-800">Drive Thresholds</h4>
 				<p class="mb-3 text-xs text-gray-500">
-					When a drive reaches its threshold, it can force a mood transition regardless of
-					energy level.
+					When a drive reaches its threshold, it can force a mood transition regardless of energy
+					level.
 				</p>
 
 				<label class="mb-3 flex flex-col gap-1">
@@ -790,7 +776,7 @@
 							bind:value={sleepPressureThreshold}
 							class="w-full"
 						/>
-						<span class="w-12 text-right text-sm tabular-nums text-gray-700"
+						<span class="w-12 text-right text-sm text-gray-700 tabular-nums"
 							>{sleepPressureThreshold.toFixed(2)}</span
 						>
 					</div>
@@ -815,7 +801,7 @@
 							bind:value={restednessThreshold}
 							class="w-full"
 						/>
-						<span class="w-12 text-right text-sm tabular-nums text-gray-700"
+						<span class="w-12 text-right text-sm text-gray-700 tabular-nums"
 							>{restednessThreshold.toFixed(2)}</span
 						>
 					</div>
@@ -829,8 +815,7 @@
 						>
 					</div>
 					<p class="text-xs text-gray-500">
-						Forces the streamling to calm down from partying when exhaustion exceeds this
-						value.
+						Forces the streamling to calm down from partying when exhaustion exceeds this value.
 					</p>
 					<div class="flex items-center gap-3">
 						<input
@@ -841,7 +826,7 @@
 							bind:value={exhaustionThreshold}
 							class="w-full"
 						/>
-						<span class="w-12 text-right text-sm tabular-nums text-gray-700"
+						<span class="w-12 text-right text-sm text-gray-700 tabular-nums"
 							>{exhaustionThreshold.toFixed(2)}</span
 						>
 					</div>
@@ -855,7 +840,7 @@
 		<button
 			onclick={handleSave}
 			disabled={saving}
-			class="rounded-md bg-indigo-600 px-6 py-2 text-sm font-medium text-white hover:bg-indigo-700 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+			class="rounded-md bg-indigo-600 px-6 py-2 text-sm font-medium text-white hover:bg-indigo-700 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
 		>
 			{saving ? 'Saving...' : 'Save Changes'}
 		</button>

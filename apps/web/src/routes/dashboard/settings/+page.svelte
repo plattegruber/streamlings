@@ -1,5 +1,6 @@
 <script>
 	import { onMount } from 'svelte';
+	import { resolve } from '$app/paths';
 	import { createConfigManager } from '$lib/config.svelte.js';
 	import ConfigEditor from '$lib/components/ConfigEditor.svelte';
 
@@ -18,10 +19,7 @@
 		<div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
 			<div class="flex h-16 items-center justify-between">
 				<div class="flex items-center gap-3">
-					<a
-						href="/dashboard"
-						class="text-sm text-gray-500 hover:text-gray-700"
-					>
+					<a href={resolve('/dashboard')} class="text-sm text-gray-500 hover:text-gray-700">
 						Dashboard
 					</a>
 					<span class="text-gray-300">/</span>

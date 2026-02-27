@@ -1,6 +1,7 @@
 <script>
 	import { useClerkContext, SignOutButton, UserButton } from 'svelte-clerk';
 	import { onDestroy } from 'svelte';
+	import { resolve } from '$app/paths';
 	import { createTelemetryPoller } from '$lib/telemetry.svelte.js';
 	import { createEventsPoller } from '$lib/events.svelte.js';
 	import MoodIndicator from '$lib/components/MoodIndicator.svelte';
@@ -36,7 +37,7 @@
 				</div>
 				<div class="flex items-center gap-4">
 					<a
-						href="/dashboard/settings"
+						href={resolve('/dashboard/settings')}
 						class="rounded-md bg-gray-100 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200"
 					>
 						Settings

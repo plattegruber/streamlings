@@ -120,9 +120,7 @@ describe('ConfigEditor', () => {
 	describe('default values displayed', () => {
 		it('shows default message weight', async () => {
 			render(ConfigEditor, defaultProps());
-			await expect
-				.element(page.getByText('default: 1', { exact: true }))
-				.toBeInTheDocument();
+			await expect.element(page.getByText('default: 1', { exact: true })).toBeInTheDocument();
 		});
 
 		it('shows default chatter weight', async () => {
@@ -154,9 +152,7 @@ describe('ConfigEditor', () => {
 
 		it('shows current chatter weight value', async () => {
 			render(ConfigEditor, defaultProps());
-			await expect
-				.element(page.getByText('0.7', { exact: true }))
-				.toBeInTheDocument();
+			await expect.element(page.getByText('0.7', { exact: true })).toBeInTheDocument();
 		});
 
 		it('shows current high-value weight value', async () => {
@@ -237,18 +233,14 @@ describe('ConfigEditor', () => {
 		it('describes what message weight controls', async () => {
 			render(ConfigEditor, defaultProps());
 			await expect
-				.element(
-					page.getByText('How much each chat message contributes to the activity signal.')
-				)
+				.element(page.getByText('How much each chat message contributes to the activity signal.'))
 				.toBeInTheDocument();
 		});
 
 		it('describes energy threshold for sleeping to idle', async () => {
 			render(ConfigEditor, defaultProps());
 			await expect
-				.element(
-					page.getByText('Energy level that can wake the streamling from sleep.')
-				)
+				.element(page.getByText('Energy level that can wake the streamling from sleep.'))
 				.toBeInTheDocument();
 		});
 
@@ -256,9 +248,7 @@ describe('ConfigEditor', () => {
 			render(ConfigEditor, defaultProps());
 			await expect
 				.element(
-					page.getByText(
-						'Rate at which sleep pressure builds while the streamling is awake.'
-					)
+					page.getByText('Rate at which sleep pressure builds while the streamling is awake.')
 				)
 				.toBeInTheDocument();
 		});
