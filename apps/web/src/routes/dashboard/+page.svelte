@@ -118,7 +118,7 @@
 		{/if}
 
 		<div class="mt-8 rounded-lg bg-white p-6 shadow">
-			<ActivityFeed {events} />
+			<ActivityFeed items={events} />
 		</div>
 	</main>
 </div>

@@ -30,19 +30,8 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Generate Cloudflare types
-        run: |
-          pnpm --filter @streamlings/streamling-state cf-typegen
-          pnpm --filter @streamlings/twitch-eventsub cf-typegen
-
-      - name: Typecheck shared package
-        run: pnpm --filter @streamlings/shared typecheck || echo "No typecheck script in shared"
-
-      - name: Typecheck streamling-state worker
-        run: pnpm --filter @streamlings/streamling-state typecheck
-
-      - name: Typecheck twitch-eventsub worker
-        run: pnpm --filter @streamlings/twitch-eventsub typecheck
+      - name: Typecheck workers
+        run: pnpm typecheck
 
       - name: Deploy streamling-state to preview
         id: deploy-state-preview
@@ -72,7 +61,7 @@ jobs:
       - name: Smoke test streamling-state preview
         run: |
           echo "Testing streamling-state at ${{ steps.deploy-state-preview.outputs.preview_url }}"
-          curl -fsSL "${{ steps.deploy-state-preview.outputs.preview_url }}/webhook" || exit 1
+          curl -fsSL "${{ steps.deploy-state-preview.outputs.preview_url }}/telemetry/smoke-test" || exit 1
 
       - name: Smoke test twitch-eventsub preview
         run: |
