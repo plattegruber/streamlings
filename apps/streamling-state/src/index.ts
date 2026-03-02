@@ -63,6 +63,7 @@ export class StreamlingState extends DurableObject<Env> {
 
 	constructor(ctx: DurableObjectState, env: Env) {
 		super(ctx, env);
+		console.log('[state] DO init start');
 		this.eventCounts = new Map();
 		this.energyState = createInitialEnergyState();
 		this.moodState = createInitialMoodState();
@@ -97,6 +98,14 @@ export class StreamlingState extends DurableObject<Env> {
 				ctx.storage.get<EventRecord[]>('recentEvents'),
 			]);
 
+			console.log('[state] storage load', {
+				hasCounts: !!storedCounts,
+				hasEnergy: !!storedEnergy,
+				hasMood: !!storedMood,
+				hasConfig: !!storedConfig,
+				hasRecentEvents: !!storedRecentEvents,
+			});
+
 			if (storedCounts) {
 				this.eventCounts = new Map(Object.entries(storedCounts));
 			}
@@ -121,6 +130,7 @@ export class StreamlingState extends DurableObject<Env> {
 
 			// Schedule the first tick
 			await this.scheduleNextTick();
+			console.log('[state] DO init complete');
 		});
 	}
 
@@ -137,6 +147,7 @@ export class StreamlingState extends DurableObject<Env> {
 	 */
 	async alarm(): Promise<void> {
 		const now = Date.now();
+		console.log('[state] tick fired');
 
 		// Calculate elapsed time for this tick window
 		const tickDurationMs = now - this.tickStartTime;
@@ -172,19 +183,16 @@ export class StreamlingState extends DurableObject<Env> {
 			this.ctx.storage.put('mood_state', this.moodState),
 		]);
 
-		// Log telemetry with event context
+		// Log tick activity
 		if (this.messageCountInTick > 0 || this.highValueEventsInTick > 0) {
-			const eventParts: string[] = [];
-			if (this.messageCountInTick > 0) {
-				eventParts.push(`${this.messageCountInTick} message${this.messageCountInTick !== 1 ? 's' : ''} (${this.uniqueChattersInTick.size} unique)`);
-			}
-			if (this.highValueEventsInTick > 0) {
-				eventParts.push(`${this.highValueEventsInTick} high-value`);
-			}
-			console.log(`📨 Events this tick: ${eventParts.join(', ')}`);
+			console.log('[state] tick events', {
+				messages: this.messageCountInTick,
+				uniqueChatters: this.uniqueChattersInTick.size,
+				highValue: this.highValueEventsInTick,
+			});
 		}
 
-		console.log('🔋 Energy & Mood Update:', {
+		console.log('[state] tick update', {
 			energy: this.energyState.energy.toFixed(3),
 			mood: this.moodState.currentState,
 			timeInState: `${(this.moodState.timeInState / 1000).toFixed(0)}s`,
@@ -211,6 +219,11 @@ export class StreamlingState extends DurableObject<Env> {
 		const current = this.eventCounts.get(eventType) || 0;
 		this.eventCounts.set(eventType, current + 1);
 
+		const category = EVENT_CATEGORIES.MESSAGE.includes(eventType) ? 'message'
+			: EVENT_CATEGORIES.HIGH_VALUE.includes(eventType) ? 'high_value'
+			: 'other';
+		console.log('[state] event received', { eventType, category, count: current + 1 });
+
 		// Track activity for energy calculation
 		if (EVENT_CATEGORIES.MESSAGE.includes(eventType)) {
 			this.messageCountInTick++;
@@ -234,6 +247,7 @@ export class StreamlingState extends DurableObject<Env> {
 			this.ctx.storage.put('event_counts', Object.fromEntries(this.eventCounts)),
 			this.ctx.storage.put('recentEvents', this.recentEvents),
 		]);
+		console.log('[state] event persisted', { eventType });
 	}
 
 	/**
@@ -275,6 +289,12 @@ export class StreamlingState extends DurableObject<Env> {
 		moodTransition?: Partial<MoodTransitionConfig>;
 		internalDrive?: Partial<InternalDriveConfig>;
 	}): Promise<void> {
+		console.log('[state] updateConfig', {
+			hasEnergy: !!config.energy,
+			hasMoodTransition: !!config.moodTransition,
+			hasInternalDrive: !!config.internalDrive,
+		});
+
 		if (config.energy) {
 			this.energyConfig = { ...this.energyConfig, ...config.energy };
 		}
@@ -290,12 +310,15 @@ export class StreamlingState extends DurableObject<Env> {
 			moodTransition: this.moodTransitionConfig,
 			internalDrive: this.internalDriveConfig,
 		});
+		console.log('[state] config persisted');
 	}
 
 	/**
 	 * Reset all state to defaults (for dev/testing)
 	 */
 	async reset(): Promise<void> {
+		console.log('[state] reset start');
+
 		this.eventCounts = new Map();
 		this.energyState = createInitialEnergyState();
 		this.moodState = createInitialMoodState();
@@ -319,6 +342,7 @@ export class StreamlingState extends DurableObject<Env> {
 		]);
 
 		await this.broadcastTelemetry();
+		console.log('[state] reset complete');
 	}
 
 	/**
@@ -341,6 +365,7 @@ export class StreamlingState extends DurableObject<Env> {
 	 */
 	async fetch(request: Request): Promise<Response> {
 		const url = new URL(request.url);
+		console.log('[state] DO fetch', { method: request.method, path: url.pathname });
 
 		// /ws - WebSocket telemetry stream
 		if (url.pathname === '/ws') {
@@ -359,6 +384,9 @@ export class StreamlingState extends DurableObject<Env> {
 				new WebSocketRequestResponsePair('ping', 'pong'),
 			);
 
+			const clientCount = this.ctx.getWebSockets().length;
+			console.log('[state] WebSocket upgrade', { clients: clientCount });
+
 			return new Response(null, { status: 101, webSocket: client });
 		}
 
@@ -370,6 +398,7 @@ export class StreamlingState extends DurableObject<Env> {
 			});
 		}
 
+		console.warn('[state] DO route not found', { path: url.pathname });
 		return new Response('Not Found', { status: 404 });
 	}
 
@@ -385,13 +414,15 @@ export class StreamlingState extends DurableObject<Env> {
 	 */
 	async webSocketClose(ws: WebSocket, code: number, reason: string, wasClean: boolean): Promise<void> {
 		ws.close(code, reason);
+		const remaining = this.ctx.getWebSockets().length;
+		console.log('[state] WebSocket close', { code, reason, remaining });
 	}
 
 	/**
 	 * Handle WebSocket errors (Hibernation API)
 	 */
 	async webSocketError(ws: WebSocket, error: unknown): Promise<void> {
-		console.error('WebSocket error:', error);
+		console.error('[state] WebSocket error', { error });
 	}
 
 	/**
@@ -399,18 +430,25 @@ export class StreamlingState extends DurableObject<Env> {
 	 */
 	private async broadcastTelemetry(): Promise<void> {
 		const sockets = this.ctx.getWebSockets();
-		if (sockets.length === 0) return;
+		if (sockets.length === 0) {
+			console.log('[state] broadcast skip, no clients');
+			return;
+		}
 
 		const telemetry = await this.getTelemetry();
 		const payload = JSON.stringify(telemetry);
+		let failures = 0;
 
 		for (const ws of sockets) {
 			try {
 				ws.send(payload);
 			} catch {
+				failures++;
 				try { ws.close(1011, 'Send failed'); } catch { /* already closed */ }
 			}
 		}
+
+		console.log('[state] broadcast', { clients: sockets.length, failures });
 	}
 }
 
@@ -465,8 +503,11 @@ export default {
 		const url = new URL(request.url);
 		const allowedOrigin = env.ALLOWED_ORIGIN ?? 'http://localhost:5173';
 
+		console.log('[state] incoming request', { method: request.method, path: url.pathname });
+
 		// Handle CORS preflight requests
 		if (request.method === 'OPTIONS') {
+			console.log('[state] CORS preflight');
 			return new Response(null, {
 				status: 204,
 				headers: corsHeaders(allowedOrigin),
@@ -493,7 +534,7 @@ export default {
 
 			// Handle EventSub verification challenge (no streamer ID needed)
 			if (body.challenge) {
-				console.log('✓ EventSub verification challenge received');
+				console.log('[state] EventSub verification challenge received');
 				return withCors(new Response(body.challenge, {
 					headers: { 'Content-Type': 'text/plain' },
 				}), allowedOrigin);
@@ -507,21 +548,22 @@ export default {
 				// Extract streamer ID from forwarded event body
 				const streamerId = eventData.internal_user_id;
 				if (!streamerId) {
+					console.warn('[state] missing internal_user_id in event body');
 					return withCors(new Response(
 						JSON.stringify({ error: 'Missing internal_user_id in event body' }),
 						{ status: 400, headers: { 'Content-Type': 'application/json' } },
 					), allowedOrigin);
 				}
 
+				console.log('[state] webhook event', { eventType, streamerId });
 				const stub = env.STREAMLING_STATE.getByName(streamerId);
 
 				// Increment count in Durable Object with event data
 				await stub.incrementEvent(eventType, eventData);
 
-				// Get all counts and log table
+				// Get all counts
 				const counts = await stub.getCounts();
-				console.log('\n📊 Event Counts:');
-				console.table(counts);
+				console.log('[state] event counts', counts);
 
 				// Return counts in response
 				return withCors(new Response(JSON.stringify(counts, null, 2), {
@@ -536,10 +578,12 @@ export default {
 		// --- All other routes require /<route>/<streamerId> ---
 		const parsed = parseStreamerPath(url.pathname);
 		if (!parsed) {
+			console.warn('[state] route not found', { path: url.pathname });
 			return withCors(new Response('Not Found', { status: 404 }), allowedOrigin);
 		}
 
 		const { route, streamerId } = parsed;
+		console.log('[state] route matched', { route, streamerId });
 		const stub = env.STREAMLING_STATE.getByName(streamerId);
 
 		// Route: GET /telemetry/:streamerId
@@ -592,6 +636,7 @@ export default {
 			}), allowedOrigin);
 		}
 
+		console.warn('[state] route not found', { path: url.pathname });
 		return withCors(new Response('Not Found', { status: 404 }), allowedOrigin);
 	},
 } satisfies ExportedHandler<Env>;

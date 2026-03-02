@@ -43,6 +43,14 @@ import { streamer, platformConnection, streamling } from '$lib/server/db/schema.
  * @returns {Promise<SyncResult>}
  */
 export async function syncTwitchConnection(db, clerkUserId, data) {
+	const syncStart = Date.now();
+	console.log('[twitch-sync] syncTwitchConnection start', {
+		clerkUserId,
+		twitchUserId: data.twitchUserId,
+		hasAccessToken: !!data.accessToken,
+		hasRefreshToken: !!data.refreshToken
+	});
+
 	// 1. Upsert streamer record (keyed on Clerk user ID)
 	const existingStreamer = await db
 		.select()
@@ -56,8 +64,8 @@ export async function syncTwitchConnection(db, clerkUserId, data) {
 			displayName: data.twitchUsername,
 			avatarUrl: data.avatarUrl
 		});
+		console.log('[twitch-sync] streamer created', { id: clerkUserId });
 	} else {
-		// Update display name and avatar if changed
 		await db
 			.update(streamer)
 			.set({
@@ -65,6 +73,7 @@ export async function syncTwitchConnection(db, clerkUserId, data) {
 				avatarUrl: data.avatarUrl ?? existingStreamer.avatarUrl
 			})
 			.where(eq(streamer.id, clerkUserId));
+		console.log('[twitch-sync] streamer updated', { id: clerkUserId });
 	}
 
 	// 2. Upsert platform_connection for Twitch
@@ -92,6 +101,7 @@ export async function syncTwitchConnection(db, clerkUserId, data) {
 			tokenExpiresAt: data.tokenExpiresAt,
 			connectedAt: new Date()
 		});
+		console.log('[twitch-sync] platform connection created', { connectionId, platform: 'twitch' });
 	} else {
 		connectionId = existingConnection.id;
 		await db
@@ -104,6 +114,7 @@ export async function syncTwitchConnection(db, clerkUserId, data) {
 				tokenExpiresAt: data.tokenExpiresAt
 			})
 			.where(eq(platformConnection.id, existingConnection.id));
+		console.log('[twitch-sync] platform connection updated', { connectionId, platform: 'twitch' });
 	}
 
 	// 3. Ensure a streamling record exists for this streamer
@@ -126,10 +137,14 @@ export async function syncTwitchConnection(db, clerkUserId, data) {
 			streamerId: clerkUserId,
 			durableObjectId
 		});
+		console.log('[twitch-sync] streamling created', { streamlingId, durableObjectId });
 	} else {
 		streamlingId = existingStreamling.id;
 		durableObjectId = existingStreamling.durableObjectId;
+		console.log('[twitch-sync] streamling exists', { streamlingId, durableObjectId });
 	}
+
+	console.log('[twitch-sync] syncTwitchConnection complete', { durationMs: Date.now() - syncStart });
 
 	return {
 		streamerId: clerkUserId,
@@ -149,6 +164,8 @@ export async function syncTwitchConnection(db, clerkUserId, data) {
  * @returns {Promise<{ platformUsername: string|null, platformUserId: string, connectedAt: Date } | null>}
  */
 export async function getTwitchConnection(db, clerkUserId) {
+	console.log('[twitch-sync] getTwitchConnection', { clerkUserId });
+
 	const connection = await db
 		.select()
 		.from(platformConnection)
@@ -157,7 +174,12 @@ export async function getTwitchConnection(db, clerkUserId) {
 		)
 		.get();
 
-	if (!connection) return null;
+	if (!connection) {
+		console.log('[twitch-sync] no connection found', { clerkUserId });
+		return null;
+	}
+
+	console.log('[twitch-sync] connection found', { clerkUserId, platformUserId: connection.platformUserId });
 
 	return {
 		platformUsername: connection.platformUsername,

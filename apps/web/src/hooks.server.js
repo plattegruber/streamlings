@@ -18,40 +18,37 @@ const clerkHandler = async ({ event, resolve }) => {
 
 	if (!publishableKey) {
 		console.error(
-			'[streamlings] Clerk publishable key missing in request environment; authentication will fail.'
+			'[hooks] Clerk publishable key missing in request environment; authentication will fail.'
 		);
 	}
+
+	console.log('[hooks] clerkHandler', { path: event.url.pathname });
 
 	const handler = withClerkHandler({
 		publishableKey,
 		secretKey
 	});
 
-	return handler({ event, resolve });
+	const response = await handler({ event, resolve });
+	console.log('[hooks] clerkHandler complete', { path: event.url.pathname, status: response.status });
+	return response;
 };
-
-let loggedDatabaseWarning = false;
 
 /**
  * Attach a database instance to the current request, preferring the Cloudflare
  * D1 binding and falling back to any configured libSQL connection when running
- * locally. Failures are logged once to avoid noisy output in environments where
- * a database is intentionally unavailable (e.g. certain tests).
+ * locally. Failures are logged to avoid silent failures in production.
  * @type {import('@sveltejs/kit').Handle}
  */
 const attachDatabase = async ({ event, resolve }) => {
 	try {
 		event.locals.db = resolveDatabase(event);
+		console.log('[hooks] database attached', { type: event.platform?.env?.DB ? 'D1' : 'libSQL' });
 	} catch (error) {
 		event.locals.db = undefined;
-
-		if (!loggedDatabaseWarning) {
-			console.warn(
-				'[streamlings] Database connection unavailable:',
-				error instanceof Error ? error.message : error
-			);
-			loggedDatabaseWarning = true;
-		}
+		console.warn('[hooks] database unavailable', {
+			error: error instanceof Error ? error.message : error
+		});
 	}
 
 	return resolve(event);
@@ -63,9 +60,11 @@ const attachDatabase = async ({ event, resolve }) => {
 const protectedRoutes = async ({ event, resolve }) => {
 	const { userId } = event.locals.auth();
 
-	// Protect /dashboard route
-	if (event.url.pathname.startsWith('/dashboard') && !userId) {
-		throw redirect(303, '/login');
+	if (event.url.pathname.startsWith('/dashboard')) {
+		console.log('[hooks] auth check', { path: event.url.pathname, hasUserId: !!userId, redirecting: !userId });
+		if (!userId) {
+			throw redirect(303, '/login');
+		}
 	}
 
 	return resolve(event);
@@ -79,8 +78,11 @@ const devRoute = async ({ event, resolve }) => {
 
 	// Block in production
 	if (!dev) {
+		console.warn('[hooks] dev route blocked in production', { path: event.url.pathname });
 		return new Response('Not Found', { status: 404 });
 	}
+
+	console.log('[hooks] dev route allowed', { path: event.url.pathname });
 
 	// Skip Clerk — provide a stub auth so downstream handlers and the
 	// root layout server (`buildClerkProps(locals.auth())`) don't throw.

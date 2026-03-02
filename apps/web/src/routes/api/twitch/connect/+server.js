@@ -14,6 +14,8 @@ import { syncTwitchConnection, getTwitchConnection } from '$lib/server/twitch-sy
  * @type {import('./$types').RequestHandler}
  */
 export async function GET({ locals }) {
+	console.log('[twitch-connect] GET request');
+
 	const { userId } = locals.auth();
 	if (!userId) {
 		throw error(401, 'Not authenticated');
@@ -21,10 +23,12 @@ export async function GET({ locals }) {
 
 	const db = locals.db;
 	if (!db) {
+		console.warn('[twitch-connect] database unavailable');
 		throw error(503, 'Database unavailable');
 	}
 
 	const connection = await getTwitchConnection(db, userId);
+	console.log('[twitch-connect] GET result', { userId, connected: connection !== null });
 
 	return json({
 		connected: connection !== null,
@@ -42,6 +46,8 @@ export async function GET({ locals }) {
  * @type {import('./$types').RequestHandler}
  */
 export async function POST({ locals }) {
+	console.log('[twitch-connect] POST request');
+
 	const { userId } = locals.auth();
 	if (!userId) {
 		throw error(401, 'Not authenticated');
@@ -49,17 +55,24 @@ export async function POST({ locals }) {
 
 	const db = locals.db;
 	if (!db) {
+		console.warn('[twitch-connect] database unavailable');
 		throw error(503, 'Database unavailable');
 	}
 
 	// Fetch user from Clerk to get their external accounts
+	const clerkStart = Date.now();
 	const clerkUser = await clerkClient.users.getUser(userId);
+	console.log('[twitch-connect] Clerk getUser', { userId, durationMs: Date.now() - clerkStart });
+
+	const externalAccountCount = clerkUser.externalAccounts?.length ?? 0;
+	console.log('[twitch-connect] external accounts', { count: externalAccountCount });
 
 	const twitchAccount = clerkUser.externalAccounts?.find(
 		(account) => account.provider === 'oauth_twitch'
 	);
 
 	if (!twitchAccount) {
+		console.warn('[twitch-connect] no Twitch account linked', { userId });
 		throw error(
 			400,
 			'No Twitch account linked in Clerk. Please connect Twitch through your profile settings first.'
@@ -73,17 +86,19 @@ export async function POST({ locals }) {
 	let tokenExpiresAt = null;
 
 	try {
+		const tokenStart = Date.now();
 		const tokenResponse = await clerkClient.users.getUserOauthAccessToken(userId, 'twitch');
 		const tokens = tokenResponse.data;
 		if (tokens && tokens.length > 0) {
 			accessToken = tokens[0].token;
 			tokenExpiresAt = tokens[0].expiresAt ? new Date(tokens[0].expiresAt * 1000) : null;
 		}
+		console.log('[twitch-connect] token retrieval', { hasToken: !!accessToken, durationMs: Date.now() - tokenStart });
 	} catch (err) {
 		// Token retrieval may fail if Clerk doesn't store the token or the
 		// provider config doesn't request offline_access. We still proceed
 		// with the connection (just without tokens).
-		console.warn('[twitch-connect] Could not retrieve OAuth token from Clerk:', err);
+		console.warn('[twitch-connect] token retrieval failed', { error: err instanceof Error ? err.message : err });
 	}
 
 	const result = await syncTwitchConnection(db, userId, {
@@ -93,6 +108,12 @@ export async function POST({ locals }) {
 		accessToken,
 		refreshToken: null, // Clerk does not expose refresh tokens via the backend API
 		tokenExpiresAt
+	});
+
+	console.log('[twitch-connect] sync complete', {
+		streamerId: result.streamerId,
+		twitchUserId: result.twitchUserId,
+		durableObjectId: result.durableObjectId
 	});
 
 	return json({

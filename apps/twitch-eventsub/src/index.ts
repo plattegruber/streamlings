@@ -11,9 +11,11 @@ import { verifyTwitchSignature } from './verify';
 export default {
 	async fetch(request, env, ctx): Promise<Response> {
 		const url = new URL(request.url);
+		console.log('[eventsub] incoming request', { method: request.method, path: url.pathname });
 
 		// Route to /webhook endpoint
 		if (url.pathname !== '/webhook') {
+			console.warn('[eventsub] route not found', { path: url.pathname });
 			return new Response('Not Found', { status: 404 });
 		}
 
@@ -27,21 +29,25 @@ export default {
 			if (secret) {
 				const result = await verifyTwitchSignature(request.headers, rawBody, secret);
 				if (!result.valid) {
-					console.warn(`Webhook signature verification failed: ${result.error}`);
+					console.warn('[eventsub] signature verification failed', { error: result.error });
 					return new Response('Forbidden', { status: 403 });
 				}
+				console.log('[eventsub] signature verified');
 			} else {
-				console.warn(
-					'TWITCH_WEBHOOK_SECRET is not set — skipping signature verification. ' +
-					'This is acceptable for local development but must be configured in production.',
-				);
+				console.warn('[eventsub] TWITCH_WEBHOOK_SECRET not set, skipping signature verification');
 			}
 
-			const body = JSON.parse(rawBody) as any; // internal parse of already-validated body
+			let body: any;
+			try {
+				body = JSON.parse(rawBody);
+			} catch (err) {
+				console.error('[eventsub] JSON parse error', { error: err instanceof Error ? err.message : err });
+				return new Response('Bad Request', { status: 400 });
+			}
 
 			// Handle EventSub verification challenge
 			if (body.challenge) {
-				console.log('EventSub verification challenge received');
+				console.log('[eventsub] verification challenge received');
 				return new Response(body.challenge, {
 					headers: { 'Content-Type': 'text/plain' },
 				});
@@ -58,10 +64,11 @@ export default {
 				// For now, simple prefix mapping - will be more sophisticated later
 				const internalUserId = `internal_${twitchUserId}`;
 
-				console.log(`Received ${eventType} for Twitch user ${twitchUserId} -> internal ${internalUserId}`);
+				console.log('[eventsub] event received', { eventType, twitchUserId, internalUserId });
 
 				// Forward to StreamlingState worker
 				const streamlingStateUrl = env.STREAMLING_STATE_URL || 'http://localhost:8787';
+				const forwardStart = Date.now();
 				const forwardResponse = await fetch(`${streamlingStateUrl}/webhook`, {
 					method: 'POST',
 					headers: { 'Content-Type': 'application/json' },
@@ -74,15 +81,15 @@ export default {
 						},
 					}),
 				});
+				const forwardDuration = Date.now() - forwardStart;
 
 				if (!forwardResponse.ok) {
-					console.error(`Failed to forward to StreamlingState: ${forwardResponse.status}`);
+					console.error('[eventsub] forward failed', { status: forwardResponse.status, durationMs: forwardDuration });
 					return new Response('Error forwarding event', { status: 500 });
 				}
 
 				const counts = await forwardResponse.json();
-				console.log('Event forwarded successfully');
-				console.table(counts);
+				console.log('[eventsub] forward success', { status: forwardResponse.status, durationMs: forwardDuration, counts });
 
 				return new Response(JSON.stringify(counts, null, 2), {
 					status: 200,
@@ -93,6 +100,7 @@ export default {
 			return new Response('Bad Request', { status: 400 });
 		}
 
+		console.warn('[eventsub] method not allowed', { method: request.method });
 		return new Response('Method Not Allowed', { status: 405 });
 	},
 } satisfies ExportedHandler<Env>;

@@ -20,7 +20,10 @@ export const createD1Database = (binding) => drizzleD1(binding, { schema });
  * Intended for local development and tests where a D1 binding is unavailable.
  */
 export const getLibsqlDatabase = () => {
-	if (libsqlDb) return libsqlDb;
+	if (libsqlDb) {
+		console.log('[db] libSQL client cache hit');
+		return libsqlDb;
+	}
 
 	if (!env.DATABASE_URL) {
 		throw new Error('DATABASE_URL is not set');
@@ -30,6 +33,9 @@ export const getLibsqlDatabase = () => {
 		url: env.DATABASE_URL,
 		authToken: env.DATABASE_AUTH_TOKEN
 	};
+
+	const maskedUrl = env.DATABASE_URL.replace(/(\/\/[^:]+:)[^@]+(@)/, '$1***$2');
+	console.log('[db] creating libSQL client', { url: maskedUrl });
 
 	libsqlClient = libsqlClient ?? createClient(clientConfig);
 	libsqlDb = drizzleLibSQL(libsqlClient, { schema });
@@ -46,8 +52,10 @@ export const getLibsqlDatabase = () => {
  */
 export const resolveDatabase = (event) => {
 	if (event?.platform?.env?.DB) {
+		console.log('[db] using D1');
 		return createD1Database(event.platform.env.DB);
 	}
 
+	console.log('[db] using libSQL');
 	return getLibsqlDatabase();
 };
