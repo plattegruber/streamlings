@@ -17,6 +17,8 @@ declare global {
 				DB: unknown;
 				CLERK_PUBLISHABLE_KEY?: string;
 				CLERK_SECRET_KEY?: string;
+				PUBLIC_WORKER_URL?: string;
+				PUBLIC_STREAMER_ID?: string;
 			};
 		}
 	}

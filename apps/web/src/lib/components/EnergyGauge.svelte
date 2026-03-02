@@ -1,6 +1,6 @@
 <script>
 	/** @type {{ energy: number, zScore: number }} */
-	let { energy, zScore } = $props();
+	let { energy = 0, zScore = 0 } = $props();
 
 	/** Clamp energy into a 0-100 gauge width. Energy typically ranges roughly -2 to +3. */
 	const pct = $derived(Math.max(0, Math.min(100, ((energy + 2) / 5) * 100)));
@@ -40,7 +40,7 @@
 		></div>
 	</div>
 	<div class="flex items-center justify-between text-xs text-gray-500">
-		<span>E = {energy.toFixed(2)}</span>
-		<span>Z = {zScore.toFixed(2)} ({zLabel})</span>
+		<span>E = {(energy ?? 0).toFixed(2)}</span>
+		<span>Z = {(zScore ?? 0).toFixed(2)} ({zLabel})</span>
 	</div>
 </div>
