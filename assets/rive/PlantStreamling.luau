@@ -20,7 +20,9 @@ type PlantStreamling = {
   eyeStrokePaint: Paint,
   dirtPaint: Paint,
   petalOuterPaint: Paint,
+  petalMiddlePaint: Paint,
   petalInnerPaint: Paint,
+  centerDotPaint: Paint,
   vinePaint: Paint,
   leafPaint: Paint,
   canPaint: Paint,
@@ -47,7 +49,9 @@ return function(context): PlantStreamling
     eyeStrokePaint = Paint.with({ style = 'stroke', color = Color.rgb(80, 40, 20), thickness = 2.5, cap = 'round' }),
     dirtPaint = Paint.with({ style = 'fill', color = Color.rgb(140, 100, 60) }),
     petalOuterPaint = Paint.with({ style = 'fill', color = Color.rgb(200, 170, 160) }),
+    petalMiddlePaint = Paint.with({ style = 'fill', color = Color.rgb(180, 175, 150) }),
     petalInnerPaint = Paint.with({ style = 'fill', color = Color.rgb(160, 180, 140) }),
+    centerDotPaint = Paint.with({ style = 'fill', color = Color.rgb(150, 175, 135) }),
     vinePaint = Paint.with({ style = 'stroke', color = Color.rgb(100, 140, 70), thickness = 5, cap = 'round' }),
     leafPaint = Paint.with({ style = 'fill', color = Color.rgb(120, 160, 80) }),
     canPaint = Paint.with({ style = 'fill', color = Color.rgb(180, 130, 60) }),
@@ -259,6 +263,63 @@ return function(context): PlantStreamling
     s.ropePaint.thickness = 3
   end
 
+  local function drawSucculent(s: PlantStreamling, renderer: Renderer, droopAmount: number)
+    local oX, oY = 0, 30 -- same offset as pot
+    local centerY = -30   -- succulent center above pot rim
+
+    -- 1. Dirt ring — brown ellipse at pot opening
+    -- Approximate ellipse as a scaled circle: scaleY = 14/62
+    renderer:save()
+    renderer:transform(Mat2d.withTranslation(oX, oY + centerY + 25) * Mat2d.values(1, 0, 0, 14 / 62, 0, 0))
+    s.path:reset()
+    circle(s.path, 0, 0, 62)
+    renderer:drawPath(s.path, s.dirtPaint)
+    renderer:restore()
+
+    -- 2. Three concentric petal rings (outer first, inner overlaps)
+    -- Ring definitions: count, radius, petalWidth, petalHeight, paint, angleOffset
+    local rings = {
+      { count = 11, radius = 55, pw = 18, ph = 30, paint = s.petalOuterPaint, offset = 0 },
+      { count = 8,  radius = 35, pw = 14, ph = 24, paint = s.petalMiddlePaint, offset = math.pi / 8 },
+      { count = 5,  radius = 18, pw = 10, ph = 18, paint = s.petalInnerPaint, offset = math.pi / 5 },
+    }
+
+    for _, ring in rings do
+      for i = 0, ring.count - 1 do
+        local angle = (i / ring.count) * math.pi * 2 + ring.offset
+        local px = math.cos(angle) * ring.radius
+        local py = math.sin(angle) * ring.radius * (1 - droopAmount * 0.3)
+
+        renderer:save()
+        renderer:transform(
+          Mat2d.withTranslation(oX + px, oY + centerY + py)
+          * Mat2d.withRotation(angle + math.pi / 2)
+          * Mat2d.values(1, 0, 0, 1 - droopAmount * 0.15, 0, 0)
+        )
+
+        -- Teardrop petal shape
+        local hw = ring.pw / 2
+        local hw2 = ring.pw / 2.5
+        local hh = ring.ph / 2
+        s.path:reset()
+        s.path:moveTo(Vector.xy(0, -hh))
+        s.path:quadTo(Vector.xy(-hw, -ring.ph * 0.1), Vector.xy(-hw2, ring.ph * 0.2))
+        s.path:quadTo(Vector.xy(0, hh), Vector.xy(0, hh))
+        s.path:quadTo(Vector.xy(0, hh), Vector.xy(hw2, ring.ph * 0.2))
+        s.path:quadTo(Vector.xy(hw, -ring.ph * 0.1), Vector.xy(0, -hh))
+        s.path:close()
+        renderer:drawPath(s.path, ring.paint)
+
+        renderer:restore()
+      end
+    end
+
+    -- 3. Center dot
+    s.path:reset()
+    circle(s.path, oX, oY + centerY, 6)
+    renderer:drawPath(s.path, s.centerDotPaint)
+  end
+
   local function drawFace(s: PlantStreamling, renderer: Renderer, eyeState: number)
     local oX, oY = 0, 30 -- same offset as pot
 
@@ -374,6 +435,7 @@ return function(context): PlantStreamling
 
   function self:draw(renderer: Renderer)
     drawPot(self, renderer)
+    drawSucculent(self, renderer, 0)
     drawFace(self, renderer, 0)
   end
 
