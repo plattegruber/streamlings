@@ -112,7 +112,7 @@ async function executeTick(
   const profile = resolveProfile(state.profile, state.fullStreamPhaseIndex);
   const msgCount = randInt(profile.msgsMin, profile.msgsMax);
   const chatterCount = randInt(profile.chattersMin, profile.chattersMax);
-  const chatters = sampleChatters(chatterCount);
+  const chatters = sampleChatters(Math.max(chatterCount, msgCount > 0 ? 1 : 0));
 
   state.stats.tick++;
   state.stats.msgsThisTick = msgCount;
