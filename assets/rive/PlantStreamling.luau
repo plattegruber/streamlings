@@ -265,23 +265,21 @@ return function(context): PlantStreamling
 
   local function drawSucculent(s: PlantStreamling, renderer: Renderer, droopAmount: number)
     local oX, oY = 0, 30 -- same offset as pot
-    local centerY = -30   -- succulent center above pot rim
+    local centerY = -45   -- succulent center above pot rim
 
     -- 1. Dirt ring — brown ellipse at pot opening
-    -- Approximate ellipse as a scaled circle: scaleY = 14/62
     renderer:save()
-    renderer:transform(Mat2d.withTranslation(oX, oY + centerY + 25) * Mat2d.values(1, 0, 0, 14 / 62, 0, 0))
+    renderer:transform(Mat2d.withTranslation(oX, oY + centerY + 30) * Mat2d.values(1, 0, 0, 12 / 58, 0, 0))
     s.path:reset()
-    circle(s.path, 0, 0, 62)
+    circle(s.path, 0, 0, 58)
     renderer:drawPath(s.path, s.dirtPaint)
     renderer:restore()
 
     -- 2. Three concentric petal rings (outer first, inner overlaps)
-    -- Ring definitions: count, radius, petalWidth, petalHeight, paint, angleOffset
     local rings = {
-      { count = 11, radius = 55, pw = 18, ph = 30, paint = s.petalOuterPaint, offset = 0 },
-      { count = 8,  radius = 35, pw = 14, ph = 24, paint = s.petalMiddlePaint, offset = math.pi / 8 },
-      { count = 5,  radius = 18, pw = 10, ph = 18, paint = s.petalInnerPaint, offset = math.pi / 5 },
+      { count = 11, radius = 48, pw = 22, ph = 24, paint = s.petalOuterPaint, offset = 0 },
+      { count = 8,  radius = 30, pw = 18, ph = 20, paint = s.petalMiddlePaint, offset = math.pi / 8 },
+      { count = 5,  radius = 14, pw = 13, ph = 15, paint = s.petalInnerPaint, offset = math.pi / 5 },
     }
 
     for _, ring in rings do
@@ -297,16 +295,22 @@ return function(context): PlantStreamling
           * Mat2d.values(1, 0, 0, 1 - droopAmount * 0.15, 0, 0)
         )
 
-        -- Teardrop petal shape
+        -- Chubby rounded petal shape (Echeveria-like)
         local hw = ring.pw / 2
-        local hw2 = ring.pw / 2.5
         local hh = ring.ph / 2
         s.path:reset()
         s.path:moveTo(Vector.xy(0, -hh))
-        s.path:quadTo(Vector.xy(-hw, -ring.ph * 0.1), Vector.xy(-hw2, ring.ph * 0.2))
-        s.path:quadTo(Vector.xy(0, hh), Vector.xy(0, hh))
-        s.path:quadTo(Vector.xy(0, hh), Vector.xy(hw2, ring.ph * 0.2))
-        s.path:quadTo(Vector.xy(hw, -ring.ph * 0.1), Vector.xy(0, -hh))
+        s.path:cubicTo(
+          Vector.xy(-hw * 0.8, -hh * 0.6),
+          Vector.xy(-hw, hh * 0.2),
+          Vector.xy(-hw * 0.5, hh * 0.7)
+        )
+        s.path:quadTo(Vector.xy(0, hh + 2), Vector.xy(hw * 0.5, hh * 0.7))
+        s.path:cubicTo(
+          Vector.xy(hw, hh * 0.2),
+          Vector.xy(hw * 0.8, -hh * 0.6),
+          Vector.xy(0, -hh)
+        )
         s.path:close()
         renderer:drawPath(s.path, ring.paint)
 
@@ -434,8 +438,8 @@ return function(context): PlantStreamling
   end
 
   function self:draw(renderer: Renderer)
-    drawPot(self, renderer)
     drawSucculent(self, renderer, 0)
+    drawPot(self, renderer)
     drawFace(self, renderer, 0)
   end
 
