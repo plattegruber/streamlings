@@ -26,6 +26,8 @@ type PlantStreamling = {
   vinePaint: Paint,
   leafPaint: Paint,
   canPaint: Paint,
+  canHandlePaint: Paint,
+  canSpoutPaint: Paint,
 }
 
 return function(context): PlantStreamling
@@ -55,6 +57,8 @@ return function(context): PlantStreamling
     vinePaint = Paint.with({ style = 'stroke', color = Color.rgb(100, 140, 70), thickness = 5, cap = 'round' }),
     leafPaint = Paint.with({ style = 'fill', color = Color.rgb(120, 160, 80) }),
     canPaint = Paint.with({ style = 'fill', color = Color.rgb(180, 130, 60) }),
+    canHandlePaint = Paint.with({ style = 'stroke', color = Color.rgb(160, 110, 40), thickness = 2, cap = 'round' }),
+    canSpoutPaint = Paint.with({ style = 'stroke', color = Color.rgb(180, 130, 60), thickness = 2, cap = 'round' }),
   }
 
   -- Helper: draw a circle approximation using cubic bezier curves
@@ -324,6 +328,97 @@ return function(context): PlantStreamling
     renderer:drawPath(s.path, s.centerDotPaint)
   end
 
+  local function drawLeaf(s: PlantStreamling, renderer: Renderer, x: number, y: number, angle: number)
+    renderer:save()
+    renderer:transform(Mat2d.withTranslation(x, y) * Mat2d.withRotation(angle))
+    s.path:reset()
+    s.path:moveTo(Vector.xy(0, -6))
+    s.path:quadTo(Vector.xy(8, -3), Vector.xy(0, 6))
+    s.path:quadTo(Vector.xy(-8, -3), Vector.xy(0, -6))
+    s.path:close()
+    renderer:drawPath(s.path, s.leafPaint)
+    renderer:restore()
+  end
+
+  local function drawWateringCan(s: PlantStreamling, renderer: Renderer, x: number, y: number, tiltAngle: number)
+    renderer:save()
+    renderer:transform(Mat2d.withTranslation(x, y) * Mat2d.withRotation(tiltAngle))
+
+    -- Body: small rectangle (-8, -6, 16, 12)
+    s.path:reset()
+    s.path:moveTo(Vector.xy(-8, -6))
+    s.path:lineTo(Vector.xy(8, -6))
+    s.path:lineTo(Vector.xy(8, 6))
+    s.path:lineTo(Vector.xy(-8, 6))
+    s.path:close()
+    renderer:drawPath(s.path, s.canPaint)
+
+    -- Handle: semi-circle arc above body (from left to right, top half)
+    local k = 0.5522847498
+    local hr = 6 -- handle radius
+    local hcy = -6 -- center at top of body
+    s.path:reset()
+    -- Start at left of semi-circle
+    s.path:moveTo(Vector.xy(-hr, hcy))
+    -- Top-left quarter: (-hr, hcy) to (0, hcy - hr)
+    s.path:cubicTo(
+      Vector.xy(-hr, hcy - hr * k),
+      Vector.xy(-hr * k, hcy - hr),
+      Vector.xy(0, hcy - hr)
+    )
+    -- Top-right quarter: (0, hcy - hr) to (hr, hcy)
+    s.path:cubicTo(
+      Vector.xy(hr * k, hcy - hr),
+      Vector.xy(hr, hcy - hr * k),
+      Vector.xy(hr, hcy)
+    )
+    renderer:drawPath(s.path, s.canHandlePaint)
+
+    -- Spout: line from right side pointing up-right
+    s.path:reset()
+    s.path:moveTo(Vector.xy(8, -2))
+    s.path:lineTo(Vector.xy(14, -8))
+    renderer:drawPath(s.path, s.canSpoutPaint)
+
+    renderer:restore()
+  end
+
+  local function drawVines(s: PlantStreamling, renderer: Renderer, vineWaveOffset: number)
+    local oX, oY = 0, 30 -- same offset as pot
+
+    -- Left vine (holds watering can)
+    s.path:reset()
+    s.path:moveTo(Vector.xy(oX - 65, oY + 50))
+    s.path:cubicTo(
+      Vector.xy(oX - 90, oY + 30 + vineWaveOffset),
+      Vector.xy(oX - 110, oY + 15),
+      Vector.xy(oX - 125, oY + 25 + vineWaveOffset)
+    )
+    renderer:drawPath(s.path, s.vinePaint)
+
+    -- Leaves along left vine
+    drawLeaf(s, renderer, oX - 82, oY + 38 + vineWaveOffset * 0.3, -0.5)
+    drawLeaf(s, renderer, oX - 105, oY + 22 + vineWaveOffset * 0.6, -0.8)
+
+    -- Watering can at left vine tip
+    drawWateringCan(s, renderer, oX - 125, oY + 25 + vineWaveOffset, -0.3)
+
+    -- Right vine (with leaves)
+    s.path:reset()
+    s.path:moveTo(Vector.xy(oX + 65, oY + 50))
+    s.path:cubicTo(
+      Vector.xy(oX + 90, oY + 35 - vineWaveOffset * 0.3),
+      Vector.xy(oX + 115, oY + 20),
+      Vector.xy(oX + 135, oY + 15 - vineWaveOffset * 0.5)
+    )
+    renderer:drawPath(s.path, s.vinePaint)
+
+    -- 3 leaves along right vine
+    drawLeaf(s, renderer, oX + 80, oY + 42 - vineWaveOffset * 0.1, 0.4)
+    drawLeaf(s, renderer, oX + 102, oY + 28 - vineWaveOffset * 0.2, 0.6)
+    drawLeaf(s, renderer, oX + 122, oY + 18 - vineWaveOffset * 0.4, 0.8)
+  end
+
   local function drawFace(s: PlantStreamling, renderer: Renderer, eyeState: number)
     local oX, oY = 0, 30 -- same offset as pot
 
@@ -438,6 +533,7 @@ return function(context): PlantStreamling
   end
 
   function self:draw(renderer: Renderer)
+    drawVines(self, renderer, 0)
     drawSucculent(self, renderer, 0)
     drawPot(self, renderer)
     drawFace(self, renderer, 0)
