@@ -4,14 +4,16 @@
   "packageManager": "pnpm@9",
   "workspaces": [
     "apps/*",
-    "packages/*"
+    "packages/*",
+    "tools/*"
   ],
   "scripts": {
     "dev": "pnpm -r --parallel dev",
     "build": "pnpm -r build",
     "test": "pnpm -r test",
     "lint": "pnpm -r lint",
-    "typecheck": "pnpm -r typecheck"
+    "typecheck": "pnpm -r typecheck",
+    "simulate": "pnpm --filter @streamlings/simulate start --"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
