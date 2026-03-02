@@ -293,6 +293,35 @@ export class StreamlingState extends DurableObject<Env> {
 	}
 
 	/**
+	 * Reset all state to defaults (for dev/testing)
+	 */
+	async reset(): Promise<void> {
+		this.eventCounts = new Map();
+		this.energyState = createInitialEnergyState();
+		this.moodState = createInitialMoodState();
+		this.recentEvents = [];
+		this.tickStartTime = Date.now();
+		this.messageCountInTick = 0;
+		this.uniqueChattersInTick = new Set();
+		this.highValueEventsInTick = 0;
+		this.recentActivity = {
+			messagesPerMin: 0,
+			uniqueChattersPerMin: 0,
+			highValueEventsPerMin: 0,
+			timestamp: Date.now(),
+		};
+
+		await Promise.all([
+			this.ctx.storage.put('event_counts', {}),
+			this.ctx.storage.put('energy_state', this.energyState),
+			this.ctx.storage.put('mood_state', this.moodState),
+			this.ctx.storage.put('recentEvents', []),
+		]);
+
+		await this.broadcastTelemetry();
+	}
+
+	/**
 	 * Get current configuration
 	 */
 	async getConfig(): Promise<{
@@ -442,6 +471,20 @@ export default {
 				status: 204,
 				headers: corsHeaders(allowedOrigin),
 			});
+		}
+
+		// --- DEV: POST /__dev/:streamerId/reset ---
+		if ((env as any).DEV_MODE && request.method === 'POST') {
+			const devMatch = url.pathname.match(/^\/__dev\/([^/]+)\/reset$/);
+			if (devMatch) {
+				const streamerId = devMatch[1];
+				const stub = env.STREAMLING_STATE.getByName(streamerId);
+				await stub.reset();
+				const telemetry = await stub.getTelemetry();
+				return withCors(new Response(JSON.stringify(telemetry, null, 2), {
+					headers: { 'Content-Type': 'application/json' },
+				}), allowedOrigin);
+			}
 		}
 
 		// --- POST /webhook: streamer ID comes from the request body ---

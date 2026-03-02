@@ -9,6 +9,7 @@ declare global {
 			db?:
 				| import('drizzle-orm/d1').DrizzleD1Database<typeof import('$lib/server/db/schema')>
 				| import('drizzle-orm/libsql').LibSQLDatabase<typeof import('$lib/server/db/schema')>;
+			skipClerk?: boolean;
 		}
 		// interface PageData {}
 		// interface PageState {}

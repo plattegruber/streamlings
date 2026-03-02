@@ -11,6 +11,7 @@ new_sqlite_classes = ["StreamlingState"]
 
 [vars]
 ALLOWED_ORIGIN = "http://localhost:5173"
+DEV_MODE = "true"
 
 # Local dev ports:
 [dev]
