@@ -144,7 +144,9 @@ export async function syncTwitchConnection(db, clerkUserId, data) {
 		console.log('[twitch-sync] streamling exists', { streamlingId, durableObjectId });
 	}
 
-	console.log('[twitch-sync] syncTwitchConnection complete', { durationMs: Date.now() - syncStart });
+	console.log('[twitch-sync] syncTwitchConnection complete', {
+		durationMs: Date.now() - syncStart
+	});
 
 	return {
 		streamerId: clerkUserId,
@@ -179,7 +181,10 @@ export async function getTwitchConnection(db, clerkUserId) {
 		return null;
 	}
 
-	console.log('[twitch-sync] connection found', { clerkUserId, platformUserId: connection.platformUserId });
+	console.log('[twitch-sync] connection found', {
+		clerkUserId,
+		platformUserId: connection.platformUserId
+	});
 
 	return {
 		platformUsername: connection.platformUsername,

@@ -24,7 +24,10 @@ const clerkHandler = async ({ event, resolve }) => {
 	});
 
 	const response = await handler({ event, resolve });
-	console.log('[hooks] clerkHandler complete', { path: event.url.pathname, status: response.status });
+	console.log('[hooks] clerkHandler complete', {
+		path: event.url.pathname,
+		status: response.status
+	});
 	return response;
 };
 
@@ -55,7 +58,11 @@ const protectedRoutes = async ({ event, resolve }) => {
 	const { userId } = event.locals.auth();
 
 	if (event.url.pathname.startsWith('/dashboard')) {
-		console.log('[hooks] auth check', { path: event.url.pathname, hasUserId: !!userId, redirecting: !userId });
+		console.log('[hooks] auth check', {
+			path: event.url.pathname,
+			hasUserId: !!userId,
+			redirecting: !userId
+		});
 		if (!userId) {
 			throw redirect(303, '/login');
 		}

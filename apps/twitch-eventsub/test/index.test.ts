@@ -151,7 +151,7 @@ describe('Webhook signature verification integration', () => {
 
 		// Should log a warning about missing secret
 		expect(warnSpy).toHaveBeenCalledWith(
-			expect.stringContaining('TWITCH_WEBHOOK_SECRET is not set'),
+			expect.stringContaining('TWITCH_WEBHOOK_SECRET not set'),
 		);
 		warnSpy.mockRestore();
 	});

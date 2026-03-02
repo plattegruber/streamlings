@@ -93,12 +93,17 @@ export async function POST({ locals }) {
 			accessToken = tokens[0].token;
 			tokenExpiresAt = tokens[0].expiresAt ? new Date(tokens[0].expiresAt * 1000) : null;
 		}
-		console.log('[twitch-connect] token retrieval', { hasToken: !!accessToken, durationMs: Date.now() - tokenStart });
+		console.log('[twitch-connect] token retrieval', {
+			hasToken: !!accessToken,
+			durationMs: Date.now() - tokenStart
+		});
 	} catch (err) {
 		// Token retrieval may fail if Clerk doesn't store the token or the
 		// provider config doesn't request offline_access. We still proceed
 		// with the connection (just without tokens).
-		console.warn('[twitch-connect] token retrieval failed', { error: err instanceof Error ? err.message : err });
+		console.warn('[twitch-connect] token retrieval failed', {
+			error: err instanceof Error ? err.message : err
+		});
 	}
 
 	const result = await syncTwitchConnection(db, userId, {
