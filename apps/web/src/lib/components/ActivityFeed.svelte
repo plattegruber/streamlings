@@ -103,7 +103,7 @@
 		<p data-testid="empty-state" class="py-8 text-center text-sm text-gray-400">No events yet</p>
 	{:else}
 		<div class="flex max-h-96 flex-col gap-1 overflow-y-auto">
-			{#each sorted as event (event.timestamp + event.eventType + (event.userId ?? ''))}
+			{#each sorted as event, i (event.timestamp + '-' + event.eventType + '-' + (event.userId ?? '') + '-' + i)}
 				{@const config = categoryConfig(event.category)}
 				<div
 					data-testid="event-row"

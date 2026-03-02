@@ -11,6 +11,10 @@
 	<link rel="icon" href={favicon} />
 </svelte:head>
 
-<ClerkProvider {...data} {publishableKey}>
+{#if publishableKey}
+	<ClerkProvider {...data} {publishableKey}>
+		{@render children?.()}
+	</ClerkProvider>
+{:else}
 	{@render children?.()}
-</ClerkProvider>
+{/if}

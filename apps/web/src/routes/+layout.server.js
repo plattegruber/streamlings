@@ -4,6 +4,10 @@ import { env as privateEnv } from '$env/dynamic/private';
 let loggedMissingKeyWarning = false;
 
 export const load = ({ locals, platform }) => {
+	if (locals.skipClerk) {
+		return { publishableKey: '' };
+	}
+
 	const publishableKey =
 		platform?.env?.CLERK_PUBLISHABLE_KEY ?? privateEnv.CLERK_PUBLISHABLE_KEY ?? '';
 
