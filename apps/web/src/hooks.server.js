@@ -4,16 +4,25 @@ import { sequence } from '@sveltejs/kit/hooks';
 import { resolveDatabase } from '$lib/server/db';
 import { env as privateEnv } from '$env/dynamic/private';
 
+/**
+ * Detect placeholder Clerk keys that ship in .env.example.
+ * @param {string | undefined} key
+ */
+function isPlaceholderKey(key) {
+	return !key || key.startsWith('pk_test_your') || key.startsWith('sk_test_your');
+}
+
 /** @type {import('@sveltejs/kit').Handle} */
 const clerkHandler = async ({ event, resolve }) => {
 	const publishableKey =
 		event.platform?.env?.CLERK_PUBLISHABLE_KEY ?? privateEnv.CLERK_PUBLISHABLE_KEY;
 	const secretKey = event.platform?.env?.CLERK_SECRET_KEY ?? privateEnv.CLERK_SECRET_KEY;
 
-	if (!publishableKey) {
-		console.error(
-			'[hooks] Clerk publishable key missing in request environment; authentication will fail.'
-		);
+	// Skip Clerk entirely when keys are missing or placeholders (local dev)
+	if (isPlaceholderKey(publishableKey) || isPlaceholderKey(secretKey)) {
+		console.warn('[hooks] Clerk keys are placeholders — running in dev mode without auth');
+		event.locals.auth = () => /** @type {any} */ ({ userId: 'dev-user' });
+		return resolve(event);
 	}
 
 	console.log('[hooks] clerkHandler', { path: event.url.pathname });
