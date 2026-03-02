@@ -1,3 +1,19 @@
+type ZParticle = { x: number, y: number, life: number, maxLife: number, size: number }
+type WaterDrop = { x: number, y: number, vy: number, life: number, maxLife: number }
+type Sparkle = { x: number, y: number, life: number, maxLife: number, size: number }
+type ConfettiPart = { x: number, y: number, vx: number, vy: number, life: number, maxLife: number, colorIdx: number, size: number, shape: number }
+
+type AnimState = {
+  eyeState: number,
+  bounceY: number,
+  rotation: number,
+  vineWave: number,
+  droop: number,
+  perk: number,
+  blushAlpha: number,
+  swayX: number,
+}
+
 type PlantStreamling = {
   mood: Input<number>,       -- 0=sleeping, 1=idle, 2=engaged, 3=partying
   -- Internal state
@@ -5,6 +21,16 @@ type PlantStreamling = {
   currentMood: number,       -- smoothed mood for transitions
   idleVariant: number,       -- which idle animation (0, 1, or 2)
   idleTimer: number,         -- time until next idle variant switch
+  -- Particle arrays
+  zParticles: { ZParticle },
+  waterDrops: { WaterDrop },
+  sparkles: { Sparkle },
+  confetti: { ConfettiPart },
+  -- Particle spawn timers
+  zSpawnTimer: number,
+  waterSpawnTimer: number,
+  sparkleSpawnTimer: number,
+  confettiSpawnTimer: number,
   -- Drawing resources
   path: Path,
   potPaint: Paint,
@@ -28,6 +54,11 @@ type PlantStreamling = {
   canPaint: Paint,
   canHandlePaint: Paint,
   canSpoutPaint: Paint,
+  -- Particle paints
+  zPaint: Paint,
+  waterDropPaint: Paint,
+  sparklePaint: Paint,
+  confettiPaints: { Paint },
 }
 
 return function(context): PlantStreamling
@@ -37,6 +68,17 @@ return function(context): PlantStreamling
     currentMood = 1,
     idleVariant = 0,
     idleTimer = 5,
+    -- Particle arrays
+    zParticles = {},
+    waterDrops = {},
+    sparkles = {},
+    confetti = {},
+    -- Spawn timers
+    zSpawnTimer = 0,
+    waterSpawnTimer = 0,
+    sparkleSpawnTimer = 0,
+    confettiSpawnTimer = 0,
+    -- Drawing resources
     path = Path.new(),
     potPaint = Paint.with({ style = 'fill', color = Color.rgb(234, 206, 138) }),
     potRimPaint = Paint.with({ style = 'fill', color = Color.rgb(224, 196, 128) }),
@@ -59,7 +101,28 @@ return function(context): PlantStreamling
     canPaint = Paint.with({ style = 'fill', color = Color.rgb(180, 130, 60) }),
     canHandlePaint = Paint.with({ style = 'stroke', color = Color.rgb(160, 110, 40), thickness = 2, cap = 'round' }),
     canSpoutPaint = Paint.with({ style = 'stroke', color = Color.rgb(180, 130, 60), thickness = 2, cap = 'round' }),
+    -- Particle paints
+    zPaint = Paint.with({ style = 'fill', color = Color.rgba(180, 200, 255, 255) }),
+    waterDropPaint = Paint.with({ style = 'fill', color = Color.rgba(100, 180, 255, 179) }),
+    sparklePaint = Paint.with({ style = 'fill', color = Color.rgb(255, 230, 100) }),
+    confettiPaints = {
+      Paint.with({ style = 'fill', color = Color.rgb(255, 80, 80) }),   -- red
+      Paint.with({ style = 'fill', color = Color.rgb(80, 140, 255) }),  -- blue
+      Paint.with({ style = 'fill', color = Color.rgb(255, 220, 50) }),  -- yellow
+      Paint.with({ style = 'fill', color = Color.rgb(80, 200, 80) }),   -- green
+    },
   }
+
+  -- Helpers
+  local function lerp(a: number, b: number, t: number): number
+    return a + (b - a) * t
+  end
+
+  local function clamp(v: number, lo: number, hi: number): number
+    if v < lo then return lo end
+    if v > hi then return hi end
+    return v
+  end
 
   -- Helper: draw a circle approximation using cubic bezier curves
   local function circle(path: Path, cx: number, cy: number, r: number)
@@ -88,55 +151,250 @@ return function(context): PlantStreamling
     path:close()
   end
 
-  local function drawPot(s: PlantStreamling, renderer: Renderer)
-    -- All coordinates relative to pot origin (translated by 0, 30)
-    local oX, oY = 0, 30 -- pot offset from artboard center
+  -- Animation state calculation (mirrors Canvas getStateParams)
+  local function getStateParams(state: number, t: number, variant: number): AnimState
+    if state == 0 then
+      -- SLEEPING
+      return {
+        eyeState = 1,
+        bounceY = math.sin(t * math.pi / 2) * 4,
+        rotation = 0,
+        vineWave = -3,
+        droop = 0.6,
+        perk = 0,
+        blushAlpha = 0.3,
+        swayX = 0,
+      }
+    elseif state == 1 then
+      -- IDLE
+      local eyeState = 0
+      local swayX = 0
+      local vineWave = math.sin(t * 0.8) * 2
+      if variant == 0 then
+        swayX = math.sin(t * 1.2) * 3
+        local blinkCycle = t % 4
+        if blinkCycle > 3.8 and blinkCycle < 3.95 then eyeState = 1 end
+      elseif variant == 1 then
+        vineWave = math.sin(t * 1.5) * 5
+        local lookCycle = t % 5
+        if lookCycle < 1.5 then eyeState = 3
+        elseif lookCycle < 3 then eyeState = 4 end
+      elseif variant == 2 then
+        vineWave = math.sin(t * 0.5) * 3
+      end
+      return { eyeState = eyeState, bounceY = 0, rotation = 0, vineWave = vineWave, droop = 0, perk = 0, blushAlpha = 0.5, swayX = swayX }
+    elseif state == 2 then
+      -- ENGAGED
+      return {
+        eyeState = 2,
+        bounceY = math.abs(math.sin(t * math.pi / 0.75)) * 8,
+        rotation = 0,
+        vineWave = math.sin(t * 2) * 6,
+        droop = 0,
+        perk = 0.1,
+        blushAlpha = 0.6,
+        swayX = 0,
+      }
+    else
+      -- PARTYING (state == 3)
+      return {
+        eyeState = 2,
+        bounceY = math.abs(math.sin(t * math.pi / 0.4)) * 12,
+        rotation = math.sin(t * 4) * 0.05,
+        vineWave = math.sin(t * 3) * 10,
+        droop = 0,
+        perk = 0.15,
+        blushAlpha = 0.9,
+        swayX = 0,
+      }
+    end
+  end
 
-    -- Pot dimensions
-    local topW = 70    -- half-width at top
-    local botW = 55    -- half-width at bottom
-    local potH = 120   -- total height including rim
-    local rimH = 12    -- rim height
-    local potTop = -20 -- top of pot relative to offset origin
+  local function getAnimationState(mood: number, t: number, variant: number): AnimState
+    local lower = math.floor(clamp(mood, 0, 3))
+    local upper = math.min(3, lower + 1)
+    local blend = mood - lower
+
+    local stateA = getStateParams(lower, t, variant)
+    local stateB = getStateParams(upper, t, variant)
+
+    return {
+      eyeState = if blend < 0.5 then stateA.eyeState else stateB.eyeState,
+      bounceY = lerp(stateA.bounceY, stateB.bounceY, blend),
+      rotation = lerp(stateA.rotation, stateB.rotation, blend),
+      vineWave = lerp(stateA.vineWave, stateB.vineWave, blend),
+      droop = lerp(stateA.droop, stateB.droop, blend),
+      perk = lerp(stateA.perk, stateB.perk, blend),
+      blushAlpha = lerp(stateA.blushAlpha, stateB.blushAlpha, blend),
+      swayX = lerp(stateA.swayX, stateB.swayX, blend),
+    }
+  end
+
+  -- Particle update functions
+  local function updateZParticles(s: PlantStreamling, dt: number)
+    s.zSpawnTimer = s.zSpawnTimer + dt
+    local nearSleep = s.currentMood < 0.5
+    if nearSleep and s.zSpawnTimer >= 1 / 1.5 then
+      s.zSpawnTimer = s.zSpawnTimer - 1 / 1.5
+      table.insert(s.zParticles, {
+        x = 30 + math.random() * 10,
+        y = -30,
+        life = 0,
+        maxLife = 2.5,
+        size = 8 + math.random() * 6,
+      })
+    end
+    if not nearSleep then s.zSpawnTimer = 0 end
+
+    local i = #s.zParticles
+    while i >= 1 do
+      local p = s.zParticles[i]
+      p.life = p.life + dt
+      p.y = p.y - 30 * dt
+      p.x = p.x + math.sin(p.life * 2) * 15 * dt
+      if p.life >= p.maxLife then
+        table.remove(s.zParticles, i)
+      end
+      i = i - 1
+    end
+  end
+
+  local function updateWaterDrops(s: PlantStreamling, dt: number)
+    local isWatering = math.floor(s.currentMood + 0.5) == 1 and s.idleVariant == 2
+    s.waterSpawnTimer = s.waterSpawnTimer + dt
+    if isWatering and s.waterSpawnTimer >= 0.15 then
+      s.waterSpawnTimer = s.waterSpawnTimer - 0.15
+      table.insert(s.waterDrops, {
+        x = -118 + math.random() * 6,
+        y = 42 + math.random() * 4,
+        vy = 10 + math.random() * 20,
+        life = 0,
+        maxLife = 0.6,
+      })
+    end
+    if not isWatering then s.waterSpawnTimer = 0 end
+
+    local i = #s.waterDrops
+    while i >= 1 do
+      local p = s.waterDrops[i]
+      p.life = p.life + dt
+      p.vy = p.vy + 120 * dt
+      p.y = p.y + p.vy * dt
+      if p.life >= p.maxLife or p.y > 20 then
+        table.remove(s.waterDrops, i)
+      end
+      i = i - 1
+    end
+  end
+
+  local function updateSparkles(s: PlantStreamling, dt: number)
+    s.sparkleSpawnTimer = s.sparkleSpawnTimer + dt
+    local nearEngaged = s.currentMood >= 1.5 and s.currentMood < 2.8
+    if nearEngaged and s.sparkleSpawnTimer >= 0.5 then
+      s.sparkleSpawnTimer = s.sparkleSpawnTimer - 0.5
+      table.insert(s.sparkles, {
+        x = (math.random() - 0.5) * 160,
+        y = -60 + math.random() * 120,
+        life = 0,
+        maxLife = 0.8,
+        size = 3 + math.random() * 4,
+      })
+    end
+    if not nearEngaged then s.sparkleSpawnTimer = 0 end
+
+    local i = #s.sparkles
+    while i >= 1 do
+      local p = s.sparkles[i]
+      p.life = p.life + dt
+      if p.life >= p.maxLife then
+        table.remove(s.sparkles, i)
+      end
+      i = i - 1
+    end
+  end
+
+  local function updateConfetti(s: PlantStreamling, dt: number)
+    s.confettiSpawnTimer = s.confettiSpawnTimer + dt
+    local nearParty = s.currentMood >= 2.5
+    if nearParty and s.confettiSpawnTimer >= 1 / 8 then
+      s.confettiSpawnTimer = s.confettiSpawnTimer - 1 / 8
+      local angle = math.random() * math.pi * 2
+      local speed = 80 + math.random() * 120
+      table.insert(s.confetti, {
+        x = (math.random() - 0.5) * 40,
+        y = -20 + math.random() * 30,
+        vx = math.cos(angle) * speed,
+        vy = math.sin(angle) * speed - 60,
+        life = 0,
+        maxLife = 1.5,
+        colorIdx = math.floor(math.random() * 4) + 1, -- 1-indexed for Lua
+        size = 3 + math.random() * 3,
+        shape = math.floor(math.random() * 3), -- 0=circle, 1=square, 2=triangle
+      })
+    end
+    if not nearParty then s.confettiSpawnTimer = 0 end
+
+    local i = #s.confetti
+    while i >= 1 do
+      local p = s.confetti[i]
+      p.life = p.life + dt
+      p.vy = p.vy + 150 * dt
+      p.x = p.x + p.vx * dt
+      p.y = p.y + p.vy * dt
+      if p.life >= p.maxLife then
+        table.remove(s.confetti, i)
+      end
+      i = i - 1
+    end
+  end
+
+  -- Drawing functions
+  local function drawPotBody(s: PlantStreamling, renderer: Renderer)
+    -- Pot dimensions (no offset — caller provides transform)
+    local topW = 70
+    local botW = 55
+    local potH = 120
+    local rimH = 12
+    local potTop = -20
     local potBot = potTop + potH
     local cornerR = 16
 
-    -- 1. Pot body shadow (offset slightly right and down)
+    -- 1. Pot body shadow
     s.path:reset()
-    s.path:moveTo(Vector.xy(oX - topW + cornerR, oY + potTop + rimH))
-    s.path:lineTo(Vector.xy(oX + topW - cornerR, oY + potTop + rimH))
+    s.path:moveTo(Vector.xy(-topW + cornerR, potTop + rimH))
+    s.path:lineTo(Vector.xy(topW - cornerR, potTop + rimH))
     s.path:quadTo(
-      Vector.xy(oX + topW + 3, oY + potTop + rimH + 6),
-      Vector.xy(oX + botW + 3, oY + potBot - cornerR)
+      Vector.xy(topW + 3, potTop + rimH + 6),
+      Vector.xy(botW + 3, potBot - cornerR)
     )
     s.path:quadTo(
-      Vector.xy(oX + botW + 3, oY + potBot + 2),
-      Vector.xy(oX + botW - cornerR, oY + potBot + 2)
+      Vector.xy(botW + 3, potBot + 2),
+      Vector.xy(botW - cornerR, potBot + 2)
     )
-    s.path:lineTo(Vector.xy(oX - botW + cornerR, oY + potBot + 2))
+    s.path:lineTo(Vector.xy(-botW + cornerR, potBot + 2))
     s.path:quadTo(
-      Vector.xy(oX - botW - 1, oY + potBot + 2),
-      Vector.xy(oX - topW - 1, oY + potTop + rimH + 6)
+      Vector.xy(-botW - 1, potBot + 2),
+      Vector.xy(-topW - 1, potTop + rimH + 6)
     )
     s.path:close()
     renderer:drawPath(s.path, s.potShadowPaint)
 
-    -- 2. Pot body (main front face)
+    -- 2. Pot body main
     s.path:reset()
-    s.path:moveTo(Vector.xy(oX - topW + cornerR, oY + potTop + rimH))
-    s.path:lineTo(Vector.xy(oX + topW - cornerR, oY + potTop + rimH))
+    s.path:moveTo(Vector.xy(-topW + cornerR, potTop + rimH))
+    s.path:lineTo(Vector.xy(topW - cornerR, potTop + rimH))
     s.path:quadTo(
-      Vector.xy(oX + topW, oY + potTop + rimH + 8),
-      Vector.xy(oX + botW, oY + potBot - cornerR)
+      Vector.xy(topW, potTop + rimH + 8),
+      Vector.xy(botW, potBot - cornerR)
     )
     s.path:quadTo(
-      Vector.xy(oX + botW, oY + potBot),
-      Vector.xy(oX + botW - cornerR, oY + potBot)
+      Vector.xy(botW, potBot),
+      Vector.xy(botW - cornerR, potBot)
     )
-    s.path:lineTo(Vector.xy(oX - botW + cornerR, oY + potBot))
+    s.path:lineTo(Vector.xy(-botW + cornerR, potBot))
     s.path:quadTo(
-      Vector.xy(oX - botW, oY + potBot),
-      Vector.xy(oX - topW, oY + potTop + rimH + 8)
+      Vector.xy(-botW, potBot),
+      Vector.xy(-topW, potTop + rimH + 8)
     )
     s.path:close()
     renderer:drawPath(s.path, s.potPaint)
@@ -148,40 +406,40 @@ return function(context): PlantStreamling
     local rimR = 6
 
     s.path:reset()
-    s.path:moveTo(Vector.xy(oX - rimW + rimR, oY + rimTop + 3))
-    s.path:lineTo(Vector.xy(oX + rimW - rimR, oY + rimTop + 3))
+    s.path:moveTo(Vector.xy(-rimW + rimR, rimTop + 3))
+    s.path:lineTo(Vector.xy(rimW - rimR, rimTop + 3))
     s.path:quadTo(
-      Vector.xy(oX + rimW + 2, oY + rimTop + 3),
-      Vector.xy(oX + rimW + 2, oY + rimBot + 1)
+      Vector.xy(rimW + 2, rimTop + 3),
+      Vector.xy(rimW + 2, rimBot + 1)
     )
-    s.path:lineTo(Vector.xy(oX - rimW - 2, oY + rimBot + 1))
+    s.path:lineTo(Vector.xy(-rimW - 2, rimBot + 1))
     s.path:quadTo(
-      Vector.xy(oX - rimW - 2, oY + rimTop + 3),
-      Vector.xy(oX - rimW + rimR, oY + rimTop + 3)
+      Vector.xy(-rimW - 2, rimTop + 3),
+      Vector.xy(-rimW + rimR, rimTop + 3)
     )
     s.path:close()
     renderer:drawPath(s.path, s.potShadowPaint)
 
     -- 4. Rim main
     s.path:reset()
-    s.path:moveTo(Vector.xy(oX - rimW + rimR, oY + rimTop))
-    s.path:lineTo(Vector.xy(oX + rimW - rimR, oY + rimTop))
+    s.path:moveTo(Vector.xy(-rimW + rimR, rimTop))
+    s.path:lineTo(Vector.xy(rimW - rimR, rimTop))
     s.path:quadTo(
-      Vector.xy(oX + rimW, oY + rimTop),
-      Vector.xy(oX + rimW, oY + rimTop + rimH * 0.5)
+      Vector.xy(rimW, rimTop),
+      Vector.xy(rimW, rimTop + rimH * 0.5)
     )
     s.path:quadTo(
-      Vector.xy(oX + rimW, oY + rimBot),
-      Vector.xy(oX + rimW - rimR, oY + rimBot)
+      Vector.xy(rimW, rimBot),
+      Vector.xy(rimW - rimR, rimBot)
     )
-    s.path:lineTo(Vector.xy(oX - rimW + rimR, oY + rimBot))
+    s.path:lineTo(Vector.xy(-rimW + rimR, rimBot))
     s.path:quadTo(
-      Vector.xy(oX - rimW, oY + rimBot),
-      Vector.xy(oX - rimW, oY + rimTop + rimH * 0.5)
+      Vector.xy(-rimW, rimBot),
+      Vector.xy(-rimW, rimTop + rimH * 0.5)
     )
     s.path:quadTo(
-      Vector.xy(oX - rimW, oY + rimTop),
-      Vector.xy(oX - rimW + rimR, oY + rimTop)
+      Vector.xy(-rimW, rimTop),
+      Vector.xy(-rimW + rimR, rimTop)
     )
     s.path:close()
     renderer:drawPath(s.path, s.potRimPaint)
@@ -192,25 +450,25 @@ return function(context): PlantStreamling
     local ropeHalfW = topW - (topW - botW) * frac - 3
 
     s.path:reset()
-    s.path:moveTo(Vector.xy(oX - ropeHalfW, oY + ropeY))
+    s.path:moveTo(Vector.xy(-ropeHalfW, ropeY))
     s.path:quadTo(
-      Vector.xy(oX, oY + ropeY + 3),
-      Vector.xy(oX + ropeHalfW, oY + ropeY)
+      Vector.xy(0, ropeY + 3),
+      Vector.xy(ropeHalfW, ropeY)
     )
     renderer:drawPath(s.path, s.ropePaint)
 
     -- 6. Rope band — lower line
     s.path:reset()
-    s.path:moveTo(Vector.xy(oX - ropeHalfW, oY + ropeY + 6))
+    s.path:moveTo(Vector.xy(-ropeHalfW, ropeY + 6))
     s.path:quadTo(
-      Vector.xy(oX, oY + ropeY + 9),
-      Vector.xy(oX + ropeHalfW, oY + ropeY + 6)
+      Vector.xy(0, ropeY + 9),
+      Vector.xy(ropeHalfW, ropeY + 6)
     )
     renderer:drawPath(s.path, s.ropePaint)
 
     -- 7. Bow — left loop
-    local bowCX = oX
-    local bowCY = oY + ropeY + 3
+    local bowCX = 0
+    local bowCY = ropeY + 3
 
     s.path:reset()
     s.path:moveTo(Vector.xy(bowCX - 2, bowCY))
@@ -263,23 +521,22 @@ return function(context): PlantStreamling
     )
     renderer:drawPath(s.path, s.ropePaint)
 
-    -- Restore rope thickness for next frame
+    -- Restore rope thickness
     s.ropePaint.thickness = 3
   end
 
   local function drawSucculent(s: PlantStreamling, renderer: Renderer, droopAmount: number)
-    local oX, oY = 0, 30 -- same offset as pot
-    local centerY = -45   -- succulent center above pot rim
+    local centerY = -45
 
-    -- 1. Dirt ring — brown ellipse at pot opening
+    -- 1. Dirt ring
     renderer:save()
-    renderer:transform(Mat2d.withTranslation(oX, oY + centerY + 30) * Mat2d.values(1, 0, 0, 12 / 58, 0, 0))
+    renderer:transform(Mat2d.withTranslation(0, centerY + 30) * Mat2d.values(1, 0, 0, 12 / 58, 0, 0))
     s.path:reset()
     circle(s.path, 0, 0, 58)
     renderer:drawPath(s.path, s.dirtPaint)
     renderer:restore()
 
-    -- 2. Three concentric petal rings (outer first, inner overlaps)
+    -- 2. Three concentric petal rings
     local rings = {
       { count = 11, radius = 48, pw = 22, ph = 24, paint = s.petalOuterPaint, offset = 0 },
       { count = 8,  radius = 30, pw = 18, ph = 20, paint = s.petalMiddlePaint, offset = math.pi / 8 },
@@ -294,12 +551,11 @@ return function(context): PlantStreamling
 
         renderer:save()
         renderer:transform(
-          Mat2d.withTranslation(oX + px, oY + centerY + py)
+          Mat2d.withTranslation(px, centerY + py)
           * Mat2d.withRotation(angle + math.pi / 2)
           * Mat2d.values(1, 0, 0, 1 - droopAmount * 0.15, 0, 0)
         )
 
-        -- Chubby rounded petal shape (Echeveria-like)
         local hw = ring.pw / 2
         local hh = ring.ph / 2
         s.path:reset()
@@ -324,7 +580,7 @@ return function(context): PlantStreamling
 
     -- 3. Center dot
     s.path:reset()
-    circle(s.path, oX, oY + centerY, 6)
+    circle(s.path, 0, centerY, 6)
     renderer:drawPath(s.path, s.centerDotPaint)
   end
 
@@ -344,7 +600,7 @@ return function(context): PlantStreamling
     renderer:save()
     renderer:transform(Mat2d.withTranslation(x, y) * Mat2d.withRotation(tiltAngle))
 
-    -- Body: small rectangle (-8, -6, 16, 12)
+    -- Body
     s.path:reset()
     s.path:moveTo(Vector.xy(-8, -6))
     s.path:lineTo(Vector.xy(8, -6))
@@ -353,20 +609,17 @@ return function(context): PlantStreamling
     s.path:close()
     renderer:drawPath(s.path, s.canPaint)
 
-    -- Handle: semi-circle arc above body (from left to right, top half)
+    -- Handle
     local k = 0.5522847498
-    local hr = 6 -- handle radius
-    local hcy = -6 -- center at top of body
+    local hr = 6
+    local hcy = -6
     s.path:reset()
-    -- Start at left of semi-circle
     s.path:moveTo(Vector.xy(-hr, hcy))
-    -- Top-left quarter: (-hr, hcy) to (0, hcy - hr)
     s.path:cubicTo(
       Vector.xy(-hr, hcy - hr * k),
       Vector.xy(-hr * k, hcy - hr),
       Vector.xy(0, hcy - hr)
     )
-    -- Top-right quarter: (0, hcy - hr) to (hr, hcy)
     s.path:cubicTo(
       Vector.xy(hr * k, hcy - hr),
       Vector.xy(hr, hcy - hr * k),
@@ -374,7 +627,7 @@ return function(context): PlantStreamling
     )
     renderer:drawPath(s.path, s.canHandlePaint)
 
-    -- Spout: line from right side pointing up-right
+    -- Spout
     s.path:reset()
     s.path:moveTo(Vector.xy(8, -2))
     s.path:lineTo(Vector.xy(14, -8))
@@ -384,76 +637,67 @@ return function(context): PlantStreamling
   end
 
   local function drawVines(s: PlantStreamling, renderer: Renderer, vineWaveOffset: number)
-    local oX, oY = 0, 30 -- same offset as pot
-
-    -- Left vine (holds watering can)
+    -- Left vine (coordinates relative to shared transform)
     s.path:reset()
-    s.path:moveTo(Vector.xy(oX - 65, oY + 50))
+    s.path:moveTo(Vector.xy(-65, 20))
     s.path:cubicTo(
-      Vector.xy(oX - 90, oY + 30 + vineWaveOffset),
-      Vector.xy(oX - 110, oY + 15),
-      Vector.xy(oX - 125, oY + 25 + vineWaveOffset)
+      Vector.xy(-90, 0 + vineWaveOffset),
+      Vector.xy(-110, -15),
+      Vector.xy(-125, -5 + vineWaveOffset)
     )
     renderer:drawPath(s.path, s.vinePaint)
 
     -- Leaves along left vine
-    drawLeaf(s, renderer, oX - 82, oY + 38 + vineWaveOffset * 0.3, -0.5)
-    drawLeaf(s, renderer, oX - 105, oY + 22 + vineWaveOffset * 0.6, -0.8)
+    drawLeaf(s, renderer, -82, 8 + vineWaveOffset * 0.3, -0.5)
+    drawLeaf(s, renderer, -105, -8 + vineWaveOffset * 0.6, -0.8)
 
     -- Watering can at left vine tip
-    drawWateringCan(s, renderer, oX - 125, oY + 25 + vineWaveOffset, -0.3)
+    drawWateringCan(s, renderer, -125, -5 + vineWaveOffset, -0.3)
 
-    -- Right vine (with leaves)
+    -- Right vine
     s.path:reset()
-    s.path:moveTo(Vector.xy(oX + 65, oY + 50))
+    s.path:moveTo(Vector.xy(65, 20))
     s.path:cubicTo(
-      Vector.xy(oX + 90, oY + 35 - vineWaveOffset * 0.3),
-      Vector.xy(oX + 115, oY + 20),
-      Vector.xy(oX + 135, oY + 15 - vineWaveOffset * 0.5)
+      Vector.xy(90, 5 - vineWaveOffset * 0.3),
+      Vector.xy(115, -10),
+      Vector.xy(135, -15 - vineWaveOffset * 0.5)
     )
     renderer:drawPath(s.path, s.vinePaint)
 
-    -- 3 leaves along right vine
-    drawLeaf(s, renderer, oX + 80, oY + 42 - vineWaveOffset * 0.1, 0.4)
-    drawLeaf(s, renderer, oX + 102, oY + 28 - vineWaveOffset * 0.2, 0.6)
-    drawLeaf(s, renderer, oX + 122, oY + 18 - vineWaveOffset * 0.4, 0.8)
+    -- Leaves along right vine
+    drawLeaf(s, renderer, 80, 12 - vineWaveOffset * 0.1, 0.4)
+    drawLeaf(s, renderer, 102, -2 - vineWaveOffset * 0.2, 0.6)
+    drawLeaf(s, renderer, 122, -12 - vineWaveOffset * 0.4, 0.8)
   end
 
-  local function drawFace(s: PlantStreamling, renderer: Renderer, eyeState: number)
-    local oX, oY = 0, 30 -- same offset as pot
+  local function drawFace(s: PlantStreamling, renderer: Renderer, eyeState: number, blushAlpha: number)
+    local eyeY = 18
+    local eyeXOff = 22
+    local eyeR = 14
+    local irisR = 8
+    local irisRWide = 10
+    local highlightR = 3
+    local blushR = 8
+    local blushY = 28
+    local blushXOff = 32
+    local mouthY = 32
+    local k = 0.5522847498
 
-    -- Face positioning constants
-    local eyeY = 18       -- vertical center of eyes (relative to translated origin)
-    local eyeXOff = 22    -- horizontal offset from center
-    local eyeR = 14       -- white of eye radius
-    local irisR = 8       -- normal iris radius
-    local irisRWide = 10  -- wide iris radius (eyeState=2)
-    local highlightR = 3  -- highlight dot radius
-    local blushR = 8      -- blush circle radius
-    local blushY = 28     -- blush vertical position
-    local blushXOff = 32  -- blush horizontal offset
-    local mouthY = 32     -- mouth vertical position
-    local k = 0.5522847498 -- bezier circle constant
-
-    -- Eye positions (left eye, right eye)
     local eyePositions = {
       { cx = -eyeXOff, cy = eyeY },
       { cx = eyeXOff, cy = eyeY },
     }
 
     for _, eye in eyePositions do
-      local ex = oX + eye.cx
-      local ey = oY + eye.cy
+      local ex = eye.cx
+      local ey = eye.cy
 
       if eyeState == 1 then
-        -- Closed eye — happy crescent (^_^)
-        -- White circle background
+        -- Closed eye
         s.path:reset()
         circle(s.path, ex, ey, eyeR)
         renderer:drawPath(s.path, s.eyeWhitePaint)
 
-        -- Crescent arc — draw bottom half of a circle as a stroke
-        -- Semi-circle from left to right through bottom, using 2 cubic bezier segments
         local arcR = irisR
         local arcCY = ey - 2
         s.path:reset()
@@ -470,7 +714,6 @@ return function(context): PlantStreamling
         )
         renderer:drawPath(s.path, s.eyeStrokePaint)
       else
-        -- Eyes with iris — states 0, 2, 3, 4
         local currentIrisR = irisR
         local irisOffsetX = 0
 
@@ -488,39 +731,124 @@ return function(context): PlantStreamling
         circle(s.path, ex + irisOffsetX, ey, currentIrisR)
         renderer:drawPath(s.path, s.eyePaint)
 
-        -- Highlight dot (upper-right of iris)
+        -- Highlight
         s.path:reset()
         circle(s.path, ex + irisOffsetX + 3, ey - 3, highlightR)
         renderer:drawPath(s.path, s.eyeHighlightPaint)
       end
     end
 
-    -- Blush circles
+    -- Blush circles with dynamic alpha
+    s.blushPaint.color = Color.rgba(255, 140, 140, math.floor(blushAlpha * 255))
     s.path:reset()
-    circle(s.path, oX - blushXOff, oY + blushY, blushR)
+    circle(s.path, -blushXOff, blushY, blushR)
     renderer:drawPath(s.path, s.blushPaint)
 
     s.path:reset()
-    circle(s.path, oX + blushXOff, oY + blushY, blushR)
+    circle(s.path, blushXOff, blushY, blushR)
     renderer:drawPath(s.path, s.blushPaint)
 
-    -- Mouth — small open smile (crescent shape)
-    -- Upper curve from left to right (shallower)
-    -- Lower curve back (deeper) to create the filled crescent
-    local mX = oX
-    local mY = oY + mouthY
+    -- Mouth
     s.path:reset()
-    s.path:moveTo(Vector.xy(mX - 5, mY))
+    s.path:moveTo(Vector.xy(-5, mouthY))
     s.path:quadTo(
-      Vector.xy(mX, mY + 5),
-      Vector.xy(mX + 5, mY)
+      Vector.xy(0, mouthY + 5),
+      Vector.xy(5, mouthY)
     )
     s.path:quadTo(
-      Vector.xy(mX, mY + 8),
-      Vector.xy(mX - 5, mY)
+      Vector.xy(0, mouthY + 8),
+      Vector.xy(-5, mouthY)
     )
     s.path:close()
     renderer:drawPath(s.path, s.mouthPaint)
+  end
+
+  -- Particle drawing functions
+  local function drawZParticles(s: PlantStreamling, renderer: Renderer)
+    for _, p in s.zParticles do
+      local alpha = 1 - p.life / p.maxLife
+      -- Draw Z shape using path lines
+      local sz = p.size * 0.5
+      s.zPaint.color = Color.rgba(180, 200, 255, math.floor(alpha * 255))
+      s.path:reset()
+      -- Z shape: top-left to top-right, diagonal to bottom-left, bottom-left to bottom-right
+      s.path:moveTo(Vector.xy(p.x - sz, p.y - sz))
+      s.path:lineTo(Vector.xy(p.x + sz, p.y - sz))
+      s.path:lineTo(Vector.xy(p.x - sz, p.y + sz))
+      s.path:lineTo(Vector.xy(p.x + sz, p.y + sz))
+      -- Draw as stroke for better Z appearance
+      s.zPaint.style = 'stroke'
+      s.zPaint.thickness = 1.5
+      renderer:drawPath(s.path, s.zPaint)
+    end
+    -- Reset paint style for next use
+    s.zPaint.style = 'fill'
+  end
+
+  local function drawWaterDrops(s: PlantStreamling, renderer: Renderer)
+    for _, p in s.waterDrops do
+      local alpha = math.max(0, 0.7 * (1 - p.life / p.maxLife))
+      s.waterDropPaint.color = Color.rgba(100, 180, 255, math.floor(alpha * 255))
+      s.path:reset()
+      circle(s.path, p.x, p.y, 2)
+      renderer:drawPath(s.path, s.waterDropPaint)
+    end
+  end
+
+  local function drawSparkles(s: PlantStreamling, renderer: Renderer)
+    for _, p in s.sparkles do
+      local t = p.life / p.maxLife
+      local alpha = if t < 0.3 then t / 0.3 else (1 - t) / 0.7
+      local sz = p.size
+      s.sparklePaint.color = Color.rgba(255, 230, 100, math.floor(alpha * 255))
+      -- 4-pointed star
+      s.path:reset()
+      s.path:moveTo(Vector.xy(p.x, p.y - sz))
+      s.path:lineTo(Vector.xy(p.x + sz * 0.3, p.y - sz * 0.3))
+      s.path:lineTo(Vector.xy(p.x + sz, p.y))
+      s.path:lineTo(Vector.xy(p.x + sz * 0.3, p.y + sz * 0.3))
+      s.path:lineTo(Vector.xy(p.x, p.y + sz))
+      s.path:lineTo(Vector.xy(p.x - sz * 0.3, p.y + sz * 0.3))
+      s.path:lineTo(Vector.xy(p.x - sz, p.y))
+      s.path:lineTo(Vector.xy(p.x - sz * 0.3, p.y - sz * 0.3))
+      s.path:close()
+      renderer:drawPath(s.path, s.sparklePaint)
+    end
+  end
+
+  local function drawConfetti(s: PlantStreamling, renderer: Renderer)
+    for _, p in s.confetti do
+      local alpha = math.max(0, 1 - p.life / p.maxLife)
+      local paint = s.confettiPaints[p.colorIdx]
+      local origColor = paint.color
+      paint.color = Color.rgba(
+        Color.red(origColor), Color.green(origColor), Color.blue(origColor),
+        math.floor(alpha * 255)
+      )
+
+      s.path:reset()
+      if p.shape == 0 then
+        -- Circle
+        circle(s.path, p.x, p.y, p.size)
+      elseif p.shape == 1 then
+        -- Square
+        s.path:moveTo(Vector.xy(p.x - p.size, p.y - p.size))
+        s.path:lineTo(Vector.xy(p.x + p.size, p.y - p.size))
+        s.path:lineTo(Vector.xy(p.x + p.size, p.y + p.size))
+        s.path:lineTo(Vector.xy(p.x - p.size, p.y + p.size))
+        s.path:close()
+      else
+        -- Triangle
+        s.path:moveTo(Vector.xy(p.x, p.y - p.size))
+        s.path:lineTo(Vector.xy(p.x + p.size, p.y + p.size))
+        s.path:lineTo(Vector.xy(p.x - p.size, p.y + p.size))
+        s.path:close()
+      end
+      renderer:drawPath(s.path, paint)
+
+      -- Restore original color
+      paint.color = origColor
+    end
   end
 
   function self:init(): boolean
@@ -529,14 +857,60 @@ return function(context): PlantStreamling
 
   function self:advance(dt: number): boolean
     self.time = self.time + dt
+
+    -- Read target mood from input
+    local targetMood = self.mood.value
+
+    -- Smooth mood transition (~0.5s)
+    self.currentMood = self.currentMood + (targetMood - self.currentMood) * math.min(1, dt * 4)
+
+    -- Idle variant cycling (5-8 seconds)
+    if math.floor(self.currentMood + 0.5) == 1 then
+      self.idleTimer = self.idleTimer - dt
+      if self.idleTimer <= 0 then
+        self.idleVariant = (self.idleVariant + 1) % 3
+        self.idleTimer = 5 + math.random() * 3
+      end
+    end
+
+    -- Update particle systems
+    updateZParticles(self, dt)
+    updateWaterDrops(self, dt)
+    updateSparkles(self, dt)
+    updateConfetti(self, dt)
+
     return true
   end
 
   function self:draw(renderer: Renderer)
-    drawVines(self, renderer, 0)
-    drawSucculent(self, renderer, 0)
-    drawPot(self, renderer)
-    drawFace(self, renderer, 0)
+    local state = getAnimationState(self.currentMood, self.time, self.idleVariant)
+
+    -- Shared transform for all character components
+    renderer:save()
+    renderer:transform(
+      Mat2d.withTranslation(state.swayX, 30 - state.bounceY)
+      * Mat2d.withRotation(state.rotation)
+    )
+
+    -- Vines behind everything
+    drawVines(self, renderer, state.vineWave)
+
+    -- Succulent above pot
+    drawSucculent(self, renderer, state.droop)
+
+    -- Pot body
+    drawPotBody(self, renderer)
+
+    -- Face on pot
+    drawFace(self, renderer, state.eyeState, state.blushAlpha)
+
+    renderer:restore()
+
+    -- Particles drawn in world space (on top of everything)
+    drawZParticles(self, renderer)
+    drawWaterDrops(self, renderer)
+    drawSparkles(self, renderer)
+    drawConfetti(self, renderer)
   end
 
   return self
