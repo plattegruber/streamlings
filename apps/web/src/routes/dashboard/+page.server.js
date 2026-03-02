@@ -42,6 +42,11 @@ export const load = async ({ locals, platform }) => {
 		}
 	}
 
+	// In dev mode (placeholder Clerk keys), align with the simulator's default streamer ID
+	if (userId === 'dev-user' && streamerId === (env.PUBLIC_DEFAULT_STREAMER_ID ?? 'default-streamer')) {
+		streamerId = 'sim-streamer-1';
+	}
+
 	return {
 		workerUrl,
 		streamerId,
