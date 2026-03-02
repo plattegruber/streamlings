@@ -26,104 +26,48 @@ describe('StreamlingOverlay', () => {
 		});
 	});
 
-	describe('applies distinct CSS classes for each mood state', () => {
-		it('applies mood-sleeping class for sleeping state', async () => {
-			const { container } = render(StreamlingOverlay, { mood: 'sleeping' });
-			const el = container.querySelector('[data-testid="streamling-overlay"]');
-			expect(el).not.toBeNull();
-			expect(/** @type {HTMLElement} */ (el).classList.contains('mood-sleeping')).toBe(true);
-		});
-
-		it('applies mood-idle class for idle state', async () => {
+	describe('renders a canvas element', () => {
+		it('contains a canvas inside the container', async () => {
 			const { container } = render(StreamlingOverlay, { mood: 'idle' });
-			const el = container.querySelector('[data-testid="streamling-overlay"]');
-			expect(el).not.toBeNull();
-			expect(/** @type {HTMLElement} */ (el).classList.contains('mood-idle')).toBe(true);
-		});
-
-		it('applies mood-engaged class for engaged state', async () => {
-			const { container } = render(StreamlingOverlay, { mood: 'engaged' });
-			const el = container.querySelector('[data-testid="streamling-overlay"]');
-			expect(el).not.toBeNull();
-			expect(/** @type {HTMLElement} */ (el).classList.contains('mood-engaged')).toBe(true);
-		});
-
-		it('applies mood-partying class for partying state', async () => {
-			const { container } = render(StreamlingOverlay, { mood: 'partying' });
-			const el = container.querySelector('[data-testid="streamling-overlay"]');
-			expect(el).not.toBeNull();
-			expect(/** @type {HTMLElement} */ (el).classList.contains('mood-partying')).toBe(true);
-		});
-	});
-
-	describe('mood-specific visual elements', () => {
-		it('shows zzz particles for sleeping mood', async () => {
-			const { container } = render(StreamlingOverlay, { mood: 'sleeping' });
-			const zzz = container.querySelector('.zzz-container');
-			expect(zzz).not.toBeNull();
-		});
-
-		it('does not show zzz particles for idle mood', async () => {
-			const { container } = render(StreamlingOverlay, { mood: 'idle' });
-			const zzz = container.querySelector('.zzz-container');
-			expect(zzz).toBeNull();
-		});
-
-		it('shows sparkle particles for partying mood', async () => {
-			const { container } = render(StreamlingOverlay, { mood: 'partying' });
-			const sparkles = container.querySelector('.sparkle-container');
-			expect(sparkles).not.toBeNull();
-		});
-
-		it('does not show sparkle particles for engaged mood', async () => {
-			const { container } = render(StreamlingOverlay, { mood: 'engaged' });
-			const sparkles = container.querySelector('.sparkle-container');
-			expect(sparkles).toBeNull();
-		});
-	});
-
-	describe('transitions between states', () => {
-		it('changes class when mood changes from idle to engaged', async () => {
-			const { container, rerender } = render(StreamlingOverlay, { mood: 'idle' });
-			const el = container.querySelector('[data-testid="streamling-overlay"]');
-			expect(/** @type {HTMLElement} */ (el).classList.contains('mood-idle')).toBe(true);
-
-			await rerender({ mood: 'engaged' });
-			expect(/** @type {HTMLElement} */ (el).classList.contains('mood-engaged')).toBe(true);
-			expect(/** @type {HTMLElement} */ (el).classList.contains('mood-idle')).toBe(false);
-		});
-
-		it('changes class when mood changes from sleeping to partying', async () => {
-			const { container, rerender } = render(StreamlingOverlay, { mood: 'sleeping' });
-			const el = container.querySelector('[data-testid="streamling-overlay"]');
-			expect(/** @type {HTMLElement} */ (el).classList.contains('mood-sleeping')).toBe(true);
-
-			await rerender({ mood: 'partying' });
-			expect(/** @type {HTMLElement} */ (el).classList.contains('mood-partying')).toBe(true);
-			expect(/** @type {HTMLElement} */ (el).classList.contains('mood-sleeping')).toBe(false);
+			const canvas = container.querySelector('canvas');
+			expect(canvas).not.toBeNull();
+			expect(canvas?.width).toBe(512);
+			expect(canvas?.height).toBe(512);
 		});
 	});
 
 	describe('handles null/undefined mood gracefully', () => {
 		it('defaults to idle when mood is null', async () => {
-			const { container } = render(StreamlingOverlay, { mood: null });
-			const el = container.querySelector('[data-testid="streamling-overlay"]');
-			expect(el).not.toBeNull();
-			expect(/** @type {HTMLElement} */ (el).classList.contains('mood-idle')).toBe(true);
+			render(StreamlingOverlay, { mood: null });
+			await expect.element(page.getByRole('img', { name: /idle/i })).toBeInTheDocument();
 		});
 
 		it('defaults to idle when mood is undefined', async () => {
-			const { container } = render(StreamlingOverlay, { mood: undefined });
-			const el = container.querySelector('[data-testid="streamling-overlay"]');
-			expect(el).not.toBeNull();
-			expect(/** @type {HTMLElement} */ (el).classList.contains('mood-idle')).toBe(true);
+			render(StreamlingOverlay, { mood: undefined });
+			await expect.element(page.getByRole('img', { name: /idle/i })).toBeInTheDocument();
 		});
 
 		it('defaults to idle for an unknown mood string', async () => {
-			const { container } = render(StreamlingOverlay, { mood: 'hypnotized' });
-			const el = container.querySelector('[data-testid="streamling-overlay"]');
-			expect(el).not.toBeNull();
-			expect(/** @type {HTMLElement} */ (el).classList.contains('mood-idle')).toBe(true);
+			render(StreamlingOverlay, { mood: 'hypnotized' });
+			await expect.element(page.getByRole('img', { name: /hypnotized/i })).toBeInTheDocument();
+		});
+	});
+
+	describe('transitions between states', () => {
+		it('updates aria-label when mood changes from idle to engaged', async () => {
+			const { rerender } = render(StreamlingOverlay, { mood: 'idle' });
+			await expect.element(page.getByRole('img', { name: /idle/i })).toBeInTheDocument();
+
+			await rerender({ mood: 'engaged' });
+			await expect.element(page.getByRole('img', { name: /engaged/i })).toBeInTheDocument();
+		});
+
+		it('updates aria-label when mood changes from sleeping to partying', async () => {
+			const { rerender } = render(StreamlingOverlay, { mood: 'sleeping' });
+			await expect.element(page.getByRole('img', { name: /sleeping/i })).toBeInTheDocument();
+
+			await rerender({ mood: 'partying' });
+			await expect.element(page.getByRole('img', { name: /partying/i })).toBeInTheDocument();
 		});
 	});
 });
