@@ -4,8 +4,9 @@ import { streamling } from '$lib/server/db/schema.js';
 import { eq } from 'drizzle-orm';
 
 /** @type {import('./$types').PageServerLoad} */
-export const load = async ({ locals }) => {
-	const workerUrl = env.PUBLIC_WORKER_URL ?? 'http://localhost:8787';
+export const load = async ({ locals, platform }) => {
+	const workerUrl =
+		platform?.env?.PUBLIC_WORKER_URL ?? env.PUBLIC_WORKER_URL ?? 'http://localhost:8787';
 
 	const { userId } = locals.auth();
 	const db = locals.db;

@@ -1,8 +1,9 @@
 import { env } from '$env/dynamic/public';
 
-export const load = ({ params }) => {
+export const load = ({ params, platform }) => {
 	return {
-		workerUrl: env.PUBLIC_WORKER_URL ?? 'http://localhost:8787',
+		workerUrl:
+			platform?.env?.PUBLIC_WORKER_URL ?? env.PUBLIC_WORKER_URL ?? 'http://localhost:8787',
 		streamerId: params.id
 	};
 };

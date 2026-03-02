@@ -17,7 +17,7 @@
 	/** @type {{ data: { workerUrl: string, streamerId: string, twitchConnection: { connected: boolean, twitchUsername: string|null } } }} */
 	let { data } = $props();
 
-	const poller = createTelemetryPoller(data.workerUrl);
+	const poller = createTelemetryPoller(data.workerUrl, data.streamerId);
 	const eventsPoller = createEventsPoller(data.workerUrl, data.streamerId);
 	onDestroy(() => {
 		poller.destroy();

@@ -52,19 +52,19 @@ describe('createTelemetryPoller', () => {
 			.mockResolvedValue(new Response(JSON.stringify(fakeTelemetry), { status: 200 }));
 
 		const { createTelemetryPoller } = await import('./telemetry.svelte.js');
-		poller = createTelemetryPoller('http://localhost:8787');
+		poller = createTelemetryPoller('http://localhost:8787', 'test-streamer');
 
 		// Let the initial fetch resolve
 		await vi.advanceTimersByTimeAsync(0);
 
-		expect(fetchSpy).toHaveBeenCalledWith('http://localhost:8787/telemetry');
+		expect(fetchSpy).toHaveBeenCalledWith('http://localhost:8787/telemetry/test-streamer');
 	});
 
 	it('sets error when fetch fails', async () => {
 		vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('Connection refused'));
 
 		const { createTelemetryPoller } = await import('./telemetry.svelte.js');
-		poller = createTelemetryPoller('http://localhost:9999');
+		poller = createTelemetryPoller('http://localhost:9999', 'test-streamer');
 
 		await vi.advanceTimersByTimeAsync(0);
 
@@ -76,7 +76,7 @@ describe('createTelemetryPoller', () => {
 		vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('Not Found', { status: 404 }));
 
 		const { createTelemetryPoller } = await import('./telemetry.svelte.js');
-		poller = createTelemetryPoller('http://localhost:8787');
+		poller = createTelemetryPoller('http://localhost:8787', 'test-streamer');
 
 		await vi.advanceTimersByTimeAsync(0);
 
@@ -89,7 +89,7 @@ describe('createTelemetryPoller', () => {
 			.mockResolvedValue(new Response(JSON.stringify(fakeTelemetry), { status: 200 }));
 
 		const { createTelemetryPoller } = await import('./telemetry.svelte.js');
-		poller = createTelemetryPoller('http://localhost:8787', 1000);
+		poller = createTelemetryPoller('http://localhost:8787', 'test-streamer', 1000);
 
 		await vi.advanceTimersByTimeAsync(0);
 		expect(fetchSpy).toHaveBeenCalledTimes(1);

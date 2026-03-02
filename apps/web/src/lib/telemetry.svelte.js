@@ -2,7 +2,7 @@
  * Reactive telemetry state that polls the streamling-state worker.
  *
  * Usage:
- *   const telemetry = createTelemetryPoller('http://localhost:8787');
+ *   const telemetry = createTelemetryPoller('http://localhost:8787', 'my-streamer');
  *   // telemetry.data   – latest StreamlingTelemetry | null
  *   // telemetry.error  – latest error message | null
  *   // telemetry.loading – true while first fetch is in-flight
@@ -12,9 +12,10 @@
 
 /**
  * @param {string} workerUrl  Base URL of the streamling-state worker
+ * @param {string} streamerId  Streamer identifier for the telemetry endpoint
  * @param {number} [intervalMs=5000]  Polling interval in milliseconds
  */
-export function createTelemetryPoller(workerUrl, intervalMs = 5000) {
+export function createTelemetryPoller(workerUrl, streamerId, intervalMs = 5000) {
 	/** @type {Record<string, any> | null} */
 	let data = $state(null);
 	/** @type {string | null} */
@@ -26,7 +27,7 @@ export function createTelemetryPoller(workerUrl, intervalMs = 5000) {
 
 	async function fetchTelemetry() {
 		try {
-			const res = await fetch(`${workerUrl}/telemetry`);
+			const res = await fetch(`${workerUrl}/telemetry/${streamerId}`);
 			if (!res.ok) {
 				throw new Error(`HTTP ${res.status}`);
 			}
