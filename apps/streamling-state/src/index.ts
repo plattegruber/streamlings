@@ -514,20 +514,6 @@ export default {
 			});
 		}
 
-		// --- DEV: POST /__dev/:streamerId/reset ---
-		if ((env as any).DEV_MODE && request.method === 'POST') {
-			const devMatch = url.pathname.match(/^\/__dev\/([^/]+)\/reset$/);
-			if (devMatch) {
-				const streamerId = devMatch[1];
-				const stub = env.STREAMLING_STATE.getByName(streamerId);
-				await stub.reset();
-				const telemetry = await stub.getTelemetry();
-				return withCors(new Response(JSON.stringify(telemetry, null, 2), {
-					headers: { 'Content-Type': 'application/json' },
-				}), allowedOrigin);
-			}
-		}
-
 		// --- POST /webhook: streamer ID comes from the request body ---
 		if (url.pathname === '/webhook' && request.method === 'POST') {
 			const body = await request.json() as any;

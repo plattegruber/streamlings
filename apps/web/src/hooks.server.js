@@ -1,17 +1,11 @@
 import { withClerkHandler } from 'svelte-clerk/server';
 import { redirect } from '@sveltejs/kit';
 import { sequence } from '@sveltejs/kit/hooks';
-import { dev } from '$app/environment';
 import { resolveDatabase } from '$lib/server/db';
 import { env as privateEnv } from '$env/dynamic/private';
 
 /** @type {import('@sveltejs/kit').Handle} */
 const clerkHandler = async ({ event, resolve }) => {
-	// Dev routes stub their own auth — skip Clerk entirely
-	if (event.url.pathname.startsWith('/dev')) {
-		return resolve(event);
-	}
-
 	const publishableKey =
 		event.platform?.env?.CLERK_PUBLISHABLE_KEY ?? privateEnv.CLERK_PUBLISHABLE_KEY;
 	const secretKey = event.platform?.env?.CLERK_SECRET_KEY ?? privateEnv.CLERK_SECRET_KEY;
@@ -70,25 +64,4 @@ const protectedRoutes = async ({ event, resolve }) => {
 	return resolve(event);
 };
 
-/** @type {import('@sveltejs/kit').Handle} */
-const devRoute = async ({ event, resolve }) => {
-	if (!event.url.pathname.startsWith('/dev')) {
-		return resolve(event);
-	}
-
-	// Block in production
-	if (!dev) {
-		console.warn('[hooks] dev route blocked in production', { path: event.url.pathname });
-		return new Response('Not Found', { status: 404 });
-	}
-
-	console.log('[hooks] dev route allowed', { path: event.url.pathname });
-
-	// Skip Clerk — provide a stub auth so downstream handlers and the
-	// root layout server (`buildClerkProps(locals.auth())`) don't throw.
-	event.locals.auth = () => /** @type {any} */ ({ userId: null, sessionId: null });
-	event.locals.skipClerk = true;
-	return resolve(event);
-};
-
-export const handle = sequence(devRoute, clerkHandler, attachDatabase, protectedRoutes);
+export const handle = sequence(clerkHandler, attachDatabase, protectedRoutes);
