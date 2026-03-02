@@ -17,6 +17,7 @@ type PlantStreamling = {
   eyeHighlightPaint: Paint,
   blushPaint: Paint,
   mouthPaint: Paint,
+  eyeStrokePaint: Paint,
   dirtPaint: Paint,
   petalOuterPaint: Paint,
   petalInnerPaint: Paint,
@@ -43,6 +44,7 @@ return function(context): PlantStreamling
     eyeHighlightPaint = Paint.with({ style = 'fill', color = Color.rgb(255, 255, 255) }),
     blushPaint = Paint.with({ style = 'fill', color = Color.rgba(255, 140, 140, 128) }),
     mouthPaint = Paint.with({ style = 'fill', color = Color.rgb(180, 60, 80) }),
+    eyeStrokePaint = Paint.with({ style = 'stroke', color = Color.rgb(80, 40, 20), thickness = 2.5, cap = 'round' }),
     dirtPaint = Paint.with({ style = 'fill', color = Color.rgb(140, 100, 60) }),
     petalOuterPaint = Paint.with({ style = 'fill', color = Color.rgb(200, 170, 160) }),
     petalInnerPaint = Paint.with({ style = 'fill', color = Color.rgb(160, 180, 140) }),
@@ -257,6 +259,110 @@ return function(context): PlantStreamling
     s.ropePaint.thickness = 3
   end
 
+  local function drawFace(s: PlantStreamling, renderer: Renderer, eyeState: number)
+    local oX, oY = 0, 30 -- same offset as pot
+
+    -- Face positioning constants
+    local eyeY = 18       -- vertical center of eyes (relative to translated origin)
+    local eyeXOff = 22    -- horizontal offset from center
+    local eyeR = 14       -- white of eye radius
+    local irisR = 8       -- normal iris radius
+    local irisRWide = 10  -- wide iris radius (eyeState=2)
+    local highlightR = 3  -- highlight dot radius
+    local blushR = 8      -- blush circle radius
+    local blushY = 28     -- blush vertical position
+    local blushXOff = 32  -- blush horizontal offset
+    local mouthY = 32     -- mouth vertical position
+    local k = 0.5522847498 -- bezier circle constant
+
+    -- Eye positions (left eye, right eye)
+    local eyePositions = {
+      { cx = -eyeXOff, cy = eyeY },
+      { cx = eyeXOff, cy = eyeY },
+    }
+
+    for _, eye in eyePositions do
+      local ex = oX + eye.cx
+      local ey = oY + eye.cy
+
+      if eyeState == 1 then
+        -- Closed eye — happy crescent (^_^)
+        -- White circle background
+        s.path:reset()
+        circle(s.path, ex, ey, eyeR)
+        renderer:drawPath(s.path, s.eyeWhitePaint)
+
+        -- Crescent arc — draw bottom half of a circle as a stroke
+        -- Semi-circle from left to right through bottom, using 2 cubic bezier segments
+        local arcR = irisR
+        local arcCY = ey - 2
+        s.path:reset()
+        s.path:moveTo(Vector.xy(ex - arcR, arcCY))
+        s.path:cubicTo(
+          Vector.xy(ex - arcR, arcCY + arcR * k),
+          Vector.xy(ex - arcR * k, arcCY + arcR),
+          Vector.xy(ex, arcCY + arcR)
+        )
+        s.path:cubicTo(
+          Vector.xy(ex + arcR * k, arcCY + arcR),
+          Vector.xy(ex + arcR, arcCY + arcR * k),
+          Vector.xy(ex + arcR, arcCY)
+        )
+        renderer:drawPath(s.path, s.eyeStrokePaint)
+      else
+        -- Eyes with iris — states 0, 2, 3, 4
+        local currentIrisR = irisR
+        local irisOffsetX = 0
+
+        if eyeState == 2 then currentIrisR = irisRWide end
+        if eyeState == 3 then irisOffsetX = -4 end
+        if eyeState == 4 then irisOffsetX = 4 end
+
+        -- White of eye
+        s.path:reset()
+        circle(s.path, ex, ey, eyeR)
+        renderer:drawPath(s.path, s.eyeWhitePaint)
+
+        -- Iris
+        s.path:reset()
+        circle(s.path, ex + irisOffsetX, ey, currentIrisR)
+        renderer:drawPath(s.path, s.eyePaint)
+
+        -- Highlight dot (upper-right of iris)
+        s.path:reset()
+        circle(s.path, ex + irisOffsetX + 3, ey - 3, highlightR)
+        renderer:drawPath(s.path, s.eyeHighlightPaint)
+      end
+    end
+
+    -- Blush circles
+    s.path:reset()
+    circle(s.path, oX - blushXOff, oY + blushY, blushR)
+    renderer:drawPath(s.path, s.blushPaint)
+
+    s.path:reset()
+    circle(s.path, oX + blushXOff, oY + blushY, blushR)
+    renderer:drawPath(s.path, s.blushPaint)
+
+    -- Mouth — small open smile (crescent shape)
+    -- Upper curve from left to right (shallower)
+    -- Lower curve back (deeper) to create the filled crescent
+    local mX = oX
+    local mY = oY + mouthY
+    s.path:reset()
+    s.path:moveTo(Vector.xy(mX - 5, mY))
+    s.path:quadTo(
+      Vector.xy(mX, mY + 5),
+      Vector.xy(mX + 5, mY)
+    )
+    s.path:quadTo(
+      Vector.xy(mX, mY + 8),
+      Vector.xy(mX - 5, mY)
+    )
+    s.path:close()
+    renderer:drawPath(s.path, s.mouthPaint)
+  end
+
   function self:init(): boolean
     return true
   end
@@ -268,6 +374,7 @@ return function(context): PlantStreamling
 
   function self:draw(renderer: Renderer)
     drawPot(self, renderer)
+    drawFace(self, renderer, 0)
   end
 
   return self
