@@ -264,7 +264,7 @@ describe('Mood System', () => {
 				baseline: 10,
 				stdDev: 5,
 				zScore: -1.6,
-				energy: 0.15, // Below engagedToIdleEnergyThreshold (0.2)
+				energy: -0.2, // Below engagedToIdleEnergyThreshold (-0.1)
 				activityHistory: [],
 				lastUpdate: startTime,
 			};
@@ -312,7 +312,7 @@ describe('Mood System', () => {
 				baseline: 10,
 				stdDev: 5,
 				zScore: -2,
-				energy: -0.9, // Below idleToSleepingEnergyThreshold (-0.8)
+				energy: -1.1, // Below idleToSleepingEnergyThreshold (-1.0)
 				activityHistory: [],
 				lastUpdate: startTime,
 			};
@@ -470,7 +470,7 @@ describe('Mood System', () => {
 			// Energy drops, should reset tracking
 			const lowEnergyState: EnergyState = {
 				...highEnergyState,
-				energy: 0.25, // Below threshold
+				energy: 0.15, // Below threshold (0.2)
 			};
 
 			moodState = updateMoodState(

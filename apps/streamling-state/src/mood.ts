@@ -195,9 +195,10 @@ function checkTransitionCondition(
           conditionMetAt = currentTime;
         }
 
-        // Check if we should transition
+        // Sleep pressure triggers the condition but still respects hold time,
+        // so the streamling lingers in idle before dozing off.
         const holdTime = currentTime - conditionMetAt!;
-        if (holdTime >= config.idleToSleepingHoldTime || sleepPressureForce) {
+        if (holdTime >= config.idleToSleepingHoldTime) {
           shouldTransition = true;
         }
       } else {
@@ -223,7 +224,7 @@ function getNextState(currentState: MoodState, energy: number): MoodState | null
 
     case MoodState.Idle:
       // Check for upward transition first (higher priority)
-      if (energy > 0.3) {
+      if (energy > 0.2) {
         return MoodState.Engaged; // Energy rising or neutral-high
       }
       // Otherwise check for sleep
@@ -316,9 +317,9 @@ export const DEFAULT_MOOD_TRANSITION_CONFIG: MoodTransitionConfig = {
   sleepToIdleMinDuration: 10 * 60 * 1000, // 10 minutes
   sleepToIdleHoldTime: 1 * 60 * 1000, // 1 minute
 
-  // Idle → Engaged
-  idleToEngagedEnergyThreshold: 0.3,
-  idleToEngagedHoldTime: 30 * 1000, // 30 seconds
+  // Idle → Engaged (fast to react — chat picks up, streamling perks up quickly)
+  idleToEngagedEnergyThreshold: 0.2,
+  idleToEngagedHoldTime: 20 * 1000, // 20 seconds
 
   // Engaged → Partying
   engagedToPartyingEnergyThreshold: 1.0,
@@ -329,12 +330,12 @@ export const DEFAULT_MOOD_TRANSITION_CONFIG: MoodTransitionConfig = {
   partyingToEngagedMaxDuration: 10 * 60 * 1000, // 10 minutes
   partyingToEngagedHoldTime: 30 * 1000, // 30 seconds
 
-  // Engaged → Idle
-  engagedToIdleEnergyThreshold: 0.2,
-  engagedToIdleHoldTime: 90 * 1000, // 90 seconds
+  // Engaged → Idle (slow to disengage — energy must go negative, with a long hold)
+  engagedToIdleEnergyThreshold: -0.1,
+  engagedToIdleHoldTime: 2 * 60 * 1000, // 2 minutes
 
   // Idle → Sleeping
-  idleToSleepingEnergyThreshold: -0.8,
+  idleToSleepingEnergyThreshold: -1.0,
   idleToSleepingHoldTime: 5 * 60 * 1000, // 5 minutes
 };
 
@@ -342,12 +343,12 @@ export const DEFAULT_MOOD_TRANSITION_CONFIG: MoodTransitionConfig = {
  * Default internal drive configuration
  */
 export const DEFAULT_INTERNAL_DRIVE_CONFIG: InternalDriveConfig = {
-  sleepPressureRate: 0.001, // Builds to 1.0 over ~1000 ticks (~2.7 hours at 10s tick)
+  sleepPressureRate: 0.0005, // Builds to 1.0 over ~2000 ticks (~5.5 hours at 10s tick)
   restednessRate: 0.002, // Builds to 1.0 over ~500 ticks (~1.4 hours at 10s tick)
   exhaustionRate: 0.01, // Builds to 1.0 over ~100 ticks (~16 minutes at 10s tick)
   curiosityRate: 0.0005, // Builds slowly
 
-  sleepPressureThreshold: 0.8, // Force sleep at 80% pressure
+  sleepPressureThreshold: 0.9, // Force sleep at 90% pressure (~5 hours awake)
   restednessThreshold: 0.9, // Force wake at 90% rested
   exhaustionThreshold: 0.85, // Force cooldown at 85% exhaustion
 };
