@@ -60,6 +60,7 @@ export class StreamlingState extends DurableObject<Env> {
 	private messageCountInTick: number;
 	private uniqueChattersInTick: Set<string>;
 	private highValueEventsInTick: number;
+	private ticking: boolean;
 
 	constructor(ctx: DurableObjectState, env: Env) {
 		super(ctx, env);
@@ -71,6 +72,7 @@ export class StreamlingState extends DurableObject<Env> {
 		this.messageCountInTick = 0;
 		this.uniqueChattersInTick = new Set();
 		this.highValueEventsInTick = 0;
+		this.ticking = false;
 		this.recentEvents = [];
 		this.recentActivity = {
 			messagesPerMin: 0,
@@ -128,9 +130,13 @@ export class StreamlingState extends DurableObject<Env> {
 				this.recentEvents = storedRecentEvents;
 			}
 
-			// Schedule the first tick
-			await this.scheduleNextTick();
-			console.log('[state] DO init complete');
+			// Check if there's already an alarm scheduled (DO was ticking before hibernation)
+			const existingAlarm = await ctx.storage.getAlarm();
+			if (existingAlarm !== null) {
+				this.ticking = true;
+			}
+
+			console.log('[state] DO init complete', { ticking: this.ticking });
 		});
 	}
 
@@ -140,6 +146,26 @@ export class StreamlingState extends DurableObject<Env> {
 	private async scheduleNextTick(): Promise<void> {
 		const nextTick = Date.now() + this.energyConfig.tickRateMs;
 		await this.ctx.storage.setAlarm(nextTick);
+		this.ticking = true;
+	}
+
+	/**
+	 * Returns true if there are connected WebSocket clients.
+	 */
+	private hasClients(): boolean {
+		return this.ctx.getWebSockets().length > 0;
+	}
+
+	/**
+	 * Ensure the tick loop is running. Called when a client connects
+	 * or an event arrives so the DO wakes from dormancy.
+	 */
+	private async ensureTicking(): Promise<void> {
+		if (!this.ticking) {
+			console.log('[state] waking up — starting tick loop');
+			this.tickStartTime = Date.now();
+			await this.scheduleNextTick();
+		}
 	}
 
 	/**
@@ -199,6 +225,9 @@ export class StreamlingState extends DurableObject<Env> {
 			sleepPressure: this.moodState.drive.sleepPressure.toFixed(2),
 		});
 
+		// Capture whether this tick had activity before resetting counters
+		const hadActivity = this.messageCountInTick > 0 || this.highValueEventsInTick > 0;
+
 		// Reset tick counters
 		this.tickStartTime = now;
 		this.messageCountInTick = 0;
@@ -208,14 +237,22 @@ export class StreamlingState extends DurableObject<Env> {
 		// Broadcast telemetry to connected WebSocket clients
 		await this.broadcastTelemetry();
 
-		// Schedule next tick
-		await this.scheduleNextTick();
+		// Only keep ticking if someone is listening or there was activity
+		if (this.hasClients() || hadActivity) {
+			await this.scheduleNextTick();
+		} else {
+			this.ticking = false;
+			console.log('[state] going dormant — no clients, no activity');
+		}
 	}
 
 	/**
 	 * Increment the count for a specific event type and track activity
 	 */
 	async incrementEvent(eventType: string, eventData?: Record<string, unknown>): Promise<void> {
+		// Wake the tick loop if dormant — events are flowing
+		await this.ensureTicking();
+
 		const current = this.eventCounts.get(eventType) || 0;
 		this.eventCounts.set(eventType, current + 1);
 
@@ -386,6 +423,13 @@ export class StreamlingState extends DurableObject<Env> {
 
 			const clientCount = this.ctx.getWebSockets().length;
 			console.log('[state] WebSocket upgrade', { clients: clientCount });
+
+			// Send immediate telemetry snapshot so the client doesn't wait for a tick
+			const telemetry = await this.getTelemetry();
+			try { server.send(JSON.stringify(telemetry)); } catch { /* not yet open */ }
+
+			// Start ticking if dormant — someone is now watching
+			await this.ensureTicking();
 
 			return new Response(null, { status: 101, webSocket: client });
 		}
