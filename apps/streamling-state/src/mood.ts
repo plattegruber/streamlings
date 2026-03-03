@@ -314,28 +314,28 @@ export const DEFAULT_MOOD_TRANSITION_CONFIG: MoodTransitionConfig = {
   // Sleeping → Idle
   sleepToIdleEnergyThreshold: -0.5,
   sleepToIdleMinDuration: 10 * 60 * 1000, // 10 minutes
-  sleepToIdleHoldTime: 2 * 60 * 1000, // 2 minutes
+  sleepToIdleHoldTime: 1 * 60 * 1000, // 1 minute
 
   // Idle → Engaged
-  idleToEngagedEnergyThreshold: 0.5,
-  idleToEngagedHoldTime: 90 * 1000, // 90 seconds
+  idleToEngagedEnergyThreshold: 0.3,
+  idleToEngagedHoldTime: 30 * 1000, // 30 seconds
 
   // Engaged → Partying
-  engagedToPartyingEnergyThreshold: 1.5,
-  engagedToPartyingHoldTime: 2 * 60 * 1000, // 2 minutes
+  engagedToPartyingEnergyThreshold: 1.0,
+  engagedToPartyingHoldTime: 45 * 1000, // 45 seconds
 
   // Partying → Engaged
-  partyingToEngagedEnergyThreshold: 1.2,
+  partyingToEngagedEnergyThreshold: 0.8,
   partyingToEngagedMaxDuration: 10 * 60 * 1000, // 10 minutes
-  partyingToEngagedHoldTime: 1 * 60 * 1000, // 1 minute
+  partyingToEngagedHoldTime: 30 * 1000, // 30 seconds
 
   // Engaged → Idle
-  engagedToIdleEnergyThreshold: 0.3,
-  engagedToIdleHoldTime: 3 * 60 * 1000, // 3 minutes
+  engagedToIdleEnergyThreshold: 0.2,
+  engagedToIdleHoldTime: 90 * 1000, // 90 seconds
 
   // Idle → Sleeping
   idleToSleepingEnergyThreshold: -0.8,
-  idleToSleepingHoldTime: 10 * 60 * 1000, // 10 minutes
+  idleToSleepingHoldTime: 5 * 60 * 1000, // 5 minutes
 };
 
 /**

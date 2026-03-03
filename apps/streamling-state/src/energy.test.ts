@@ -152,8 +152,8 @@ describe('Energy System', () => {
 			};
 			state = updateEnergyState(state, metrics2, DEFAULT_ENERGY_CONFIG);
 
-			// Baseline = 0.05 * 20 + 0.95 * 10 = 1 + 9.5 = 10.5
-			expect(state.baseline).toBe(10.5);
+			// Baseline = 0.02 * 20 + 0.98 * 10 = 0.4 + 9.8 = 10.2
+			expect(state.baseline).toBeCloseTo(10.2);
 		});
 
 		it('should track activity history for std dev', () => {

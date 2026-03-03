@@ -119,8 +119,8 @@ export function updateEnergyState(
  */
 export const DEFAULT_ENERGY_CONFIG: EnergyConfig = {
   tickRateMs: 10_000, // 10 seconds
-  baselineAlpha: 0.05, // ~2-3 min half-life
-  energyAlpha: 0.02, // ~5-10 min half-life
+  baselineAlpha: 0.02, // ~6 min half-life (slow adaptation preserves z-score signal)
+  energyAlpha: 0.08, // ~1.5 min half-life (responds to z-score changes within 1-2 min)
   minStdDev: 0.1, // Prevent division by micro-noise
   stdDevWindowSize: 60, // 10 minutes at 10s tick rate
   messageWeight: 1.0,
