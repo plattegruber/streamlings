@@ -1,5 +1,6 @@
 <script>
 	import { onMount } from 'svelte';
+	import { groups } from '$lib/assets/streamling-paths.js';
 
 	/**
 	 * @type {{ mood?: string | null }}
@@ -43,6 +44,21 @@
 		let animFrame = 0;
 		let lastTime = 0;
 
+		// --- SVG → Canvas mapping ---
+		const SVG_CX = 512;
+		const SVG_CY = 749;
+		const SCALE = 460 / 784;
+
+		// --- Pre-built Path2D objects (created once) ---
+		/** @type {Record<string, { fill: string, path: Path2D }[]>} */
+		const pathGroups = {};
+		for (const [name, paths] of Object.entries(groups)) {
+			pathGroups[name] = paths.map((p) => ({
+				fill: p.fill,
+				path: new Path2D(p.d)
+			}));
+		}
+
 		// --- Animation State ---
 		let time = 0;
 		let currentMood = moodTarget;
@@ -52,8 +68,6 @@
 		// --- Particle Arrays ---
 		/** @type {{ x: number, y: number, life: number, maxLife: number, size: number }[]} */
 		let zParticles = [];
-		/** @type {{ x: number, y: number, vy: number, life: number, maxLife: number }[]} */
-		let waterDrops = [];
 		/** @type {{ x: number, y: number, life: number, maxLife: number, size: number }[]} */
 		let sparkles = [];
 		/** @type {{ x: number, y: number, vx: number, vy: number, life: number, maxLife: number, colorIdx: number, size: number, shape: number }[]} */
@@ -61,7 +75,6 @@
 
 		// --- Spawn Timers ---
 		let zSpawnTimer = 0;
-		let waterSpawnTimer = 0;
 		let sparkleSpawnTimer = 0;
 		let confettiSpawnTimer = 0;
 
@@ -72,19 +85,6 @@
 		/** @param {number} a @param {number} b @param {number} t */
 		function lerp(a, b, t) {
 			return a + (b - a) * t;
-		}
-
-		/**
-		 * @param {CanvasRenderingContext2D} c
-		 * @param {number} cx @param {number} cy @param {number} r
-		 */
-		function circle(c, cx, cy, r) {
-			const k = 0.5522847498;
-			c.moveTo(cx + r, cy);
-			c.bezierCurveTo(cx + r, cy + r * k, cx + r * k, cy + r, cx, cy + r);
-			c.bezierCurveTo(cx - r * k, cy + r, cx - r, cy + r * k, cx - r, cy);
-			c.bezierCurveTo(cx - r, cy - r * k, cx - r * k, cy - r, cx, cy - r);
-			c.bezierCurveTo(cx + r * k, cy - r, cx + r, cy - r * k, cx + r, cy);
 		}
 
 		// ================================================================
@@ -123,7 +123,7 @@
 						if (lookCycle < 1.5) eyeState = 3;
 						else if (lookCycle < 3) eyeState = 4;
 					} else if (variant === 2) {
-						vineWave = Math.sin(t * 0.5) * 3;
+						vineWave = Math.sin(t * 2.5) * 4;
 					}
 					return {
 						eyeState,
@@ -198,8 +198,8 @@
 			if (nearSleep && zSpawnTimer >= 1 / 1.5) {
 				zSpawnTimer -= 1 / 1.5;
 				zParticles.push({
-					x: 30 + Math.random() * 10,
-					y: -30,
+					x: 20 + Math.random() * 10,
+					y: -200,
 					life: 0,
 					maxLife: 2.5,
 					size: 8 + Math.random() * 6
@@ -229,49 +229,14 @@
 		}
 
 		/** @param {number} dt */
-		function updateWaterDrops(dt) {
-			const isWatering = Math.round(currentMood) === 1 && idleVariant === 2;
-			waterSpawnTimer += dt;
-			if (isWatering && waterSpawnTimer >= 0.15) {
-				waterSpawnTimer -= 0.15;
-				waterDrops.push({
-					x: -118 + Math.random() * 6,
-					y: 42 + Math.random() * 4,
-					vy: 10 + Math.random() * 20,
-					life: 0,
-					maxLife: 0.6
-				});
-			}
-			if (!isWatering) waterSpawnTimer = 0;
-			for (let i = waterDrops.length - 1; i >= 0; i--) {
-				const p = waterDrops[i];
-				p.life += dt;
-				p.vy += 120 * dt;
-				p.y += p.vy * dt;
-				if (p.life >= p.maxLife || p.y > 20) waterDrops.splice(i, 1);
-			}
-		}
-
-		/** @param {CanvasRenderingContext2D} c */
-		function drawWaterDrops(c) {
-			for (const p of waterDrops) {
-				const alpha = Math.max(0, 0.7 * (1 - p.life / p.maxLife));
-				c.beginPath();
-				circle(c, p.x, p.y, 2);
-				c.fillStyle = `rgba(100, 180, 255, ${alpha})`;
-				c.fill();
-			}
-		}
-
-		/** @param {number} dt */
 		function updateSparkles(dt) {
 			sparkleSpawnTimer += dt;
 			const nearEngaged = currentMood >= 1.5 && currentMood < 2.8;
 			if (nearEngaged && sparkleSpawnTimer >= 0.5) {
 				sparkleSpawnTimer -= 0.5;
 				sparkles.push({
-					x: (Math.random() - 0.5) * 160,
-					y: -60 + Math.random() * 120,
+					x: (Math.random() - 0.5) * 200,
+					y: -200 + Math.random() * 300,
 					life: 0,
 					maxLife: 0.8,
 					size: 3 + Math.random() * 4
@@ -332,8 +297,8 @@
 				const angle = Math.random() * Math.PI * 2;
 				const speed = 80 + Math.random() * 120;
 				confetti.push({
-					x: (Math.random() - 0.5) * 40,
-					y: -20 + Math.random() * 30,
+					x: (Math.random() - 0.5) * 60,
+					y: -50 + Math.random() * 80,
 					vx: Math.cos(angle) * speed,
 					vy: Math.sin(angle) * speed - 60,
 					life: 0,
@@ -363,7 +328,7 @@
 				c.fillStyle = confettiColors[p.colorIdx];
 				c.beginPath();
 				if (p.shape === 0) {
-					circle(c, p.x, p.y, p.size);
+					c.arc(p.x, p.y, p.size, 0, Math.PI * 2);
 				} else if (p.shape === 1) {
 					c.rect(p.x - p.size, p.y - p.size, p.size * 2, p.size * 2);
 				} else {
@@ -378,266 +343,52 @@
 		}
 
 		// ================================================================
-		// Drawing Functions
+		// SVG Drawing Functions
 		// ================================================================
 
 		/**
 		 * @param {CanvasRenderingContext2D} c
-		 * @param {number} x @param {number} y @param {number} angle
+		 * @param {string} groupName
 		 */
-		function drawLeaf(c, x, y, angle) {
-			c.save();
-			c.translate(x, y);
-			c.rotate(angle);
-			c.beginPath();
-			c.moveTo(0, -6);
-			c.quadraticCurveTo(8, -3, 0, 6);
-			c.quadraticCurveTo(-8, -3, 0, -6);
-			c.closePath();
-			c.fillStyle = 'rgb(120, 160, 80)';
-			c.fill();
-			c.restore();
-		}
-
-		/**
-		 * @param {CanvasRenderingContext2D} c
-		 * @param {number} x @param {number} y @param {number} tiltAngle
-		 */
-		function drawWateringCan(c, x, y, tiltAngle) {
-			c.save();
-			c.translate(x, y);
-			c.rotate(tiltAngle);
-			c.beginPath();
-			c.rect(-8, -6, 16, 12);
-			c.fillStyle = 'rgb(180, 130, 60)';
-			c.fill();
-			c.beginPath();
-			c.arc(0, -6, 6, Math.PI, 0, false);
-			c.strokeStyle = 'rgb(160, 110, 40)';
-			c.lineWidth = 2;
-			c.lineCap = 'round';
-			c.stroke();
-			c.beginPath();
-			c.moveTo(8, -2);
-			c.lineTo(14, -8);
-			c.strokeStyle = 'rgb(180, 130, 60)';
-			c.lineWidth = 2;
-			c.lineCap = 'round';
-			c.stroke();
-			c.restore();
-		}
-
-		/**
-		 * @param {CanvasRenderingContext2D} c
-		 * @param {number} vineWaveOffset
-		 */
-		function drawVines(c, vineWaveOffset) {
-			c.beginPath();
-			c.moveTo(-65, 20);
-			c.bezierCurveTo(-90, vineWaveOffset, -110, -15, -125, -5 + vineWaveOffset);
-			c.strokeStyle = 'rgb(100, 140, 70)';
-			c.lineWidth = 5;
-			c.lineCap = 'round';
-			c.stroke();
-			drawLeaf(c, -82, 8 + vineWaveOffset * 0.3, -0.5);
-			drawLeaf(c, -105, -8 + vineWaveOffset * 0.6, -0.8);
-			drawWateringCan(c, -125, -5 + vineWaveOffset, -0.3);
-
-			c.beginPath();
-			c.moveTo(65, 20);
-			c.bezierCurveTo(90, 5 - vineWaveOffset * 0.3, 115, -10, 135, -15 - vineWaveOffset * 0.5);
-			c.strokeStyle = 'rgb(100, 140, 70)';
-			c.lineWidth = 5;
-			c.lineCap = 'round';
-			c.stroke();
-			drawLeaf(c, 80, 12 - vineWaveOffset * 0.1, 0.4);
-			drawLeaf(c, 102, -2 - vineWaveOffset * 0.2, 0.6);
-			drawLeaf(c, 122, -12 - vineWaveOffset * 0.4, 0.8);
-		}
-
-		/**
-		 * @param {CanvasRenderingContext2D} c
-		 * @param {number} droopAmount
-		 */
-		function drawSucculent(c, droopAmount) {
-			const centerY = -45;
-
-			c.beginPath();
-			c.ellipse(0, centerY + 30, 58, 12, 0, 0, Math.PI * 2);
-			c.fillStyle = 'rgb(140, 100, 60)';
-			c.fill();
-
-			const rings = [
-				{
-					count: 11,
-					radius: 48,
-					pw: 22,
-					ph: 24,
-					color: 'rgb(200, 170, 160)',
-					offset: 0
-				},
-				{
-					count: 8,
-					radius: 30,
-					pw: 18,
-					ph: 20,
-					color: 'rgb(180, 175, 150)',
-					offset: Math.PI / 8
-				},
-				{
-					count: 5,
-					radius: 14,
-					pw: 13,
-					ph: 15,
-					color: 'rgb(160, 180, 140)',
-					offset: Math.PI / 5
-				}
-			];
-
-			for (const ring of rings) {
-				for (let i = 0; i < ring.count; i++) {
-					const angle = (i / ring.count) * Math.PI * 2 + ring.offset;
-					const px = Math.cos(angle) * ring.radius;
-					const py = Math.sin(angle) * ring.radius * (1 - droopAmount * 0.3);
-
-					c.save();
-					c.translate(px, centerY + py);
-					c.rotate(angle + Math.PI / 2);
-					c.scale(1, 1 - droopAmount * 0.15);
-
-					const hw = ring.pw / 2;
-					const hh = ring.ph / 2;
-					c.beginPath();
-					c.moveTo(0, -hh);
-					c.bezierCurveTo(-hw * 0.8, -hh * 0.6, -hw, hh * 0.2, -hw * 0.5, hh * 0.7);
-					c.quadraticCurveTo(0, hh + 2, hw * 0.5, hh * 0.7);
-					c.bezierCurveTo(hw, hh * 0.2, hw * 0.8, -hh * 0.6, 0, -hh);
-					c.closePath();
-					c.fillStyle = ring.color;
-					c.fill();
-
-					c.restore();
-				}
+		function drawSVGGroup(c, groupName) {
+			const group = pathGroups[groupName];
+			if (!group) return;
+			for (const { fill, path } of group) {
+				c.fillStyle = fill;
+				c.fill(path);
 			}
-
-			c.beginPath();
-			circle(c, 0, centerY, 6);
-			c.fillStyle = 'rgb(150, 175, 135)';
-			c.fill();
 		}
 
-		/** @param {CanvasRenderingContext2D} c */
-		function drawPotBody(c) {
-			const topW = 70;
-			const botW = 55;
-			const potH = 120;
-			const rimH = 12;
-			const potTop = -20;
-			const potBot = potTop + potH;
-			const cornerR = 16;
+		/**
+		 * @param {CanvasRenderingContext2D} c
+		 * @param {number} leafSway
+		 * @param {number} droop
+		 */
+		function drawLeaves(c, leafSway, droop) {
+			c.save();
+			c.translate(512, 820);
+			c.rotate(leafSway * 0.004);
+			c.scale(1, 1 - droop * 0.15);
+			c.translate(-512, -820);
+			drawSVGGroup(c, 'leaves');
+			drawSVGGroup(c, 'buds');
+			c.restore();
+		}
 
-			c.beginPath();
-			c.moveTo(-topW + cornerR, potTop + rimH);
-			c.lineTo(topW - cornerR, potTop + rimH);
-			c.quadraticCurveTo(topW + 3, potTop + rimH + 6, botW + 3, potBot - cornerR);
-			c.quadraticCurveTo(botW + 3, potBot + 2, botW - cornerR, potBot + 2);
-			c.lineTo(-botW + cornerR, potBot + 2);
-			c.quadraticCurveTo(-botW - 1, potBot + 2, -topW - 1, potTop + rimH + 6);
-			c.closePath();
-			c.fillStyle = 'rgb(200, 170, 100)';
-			c.fill();
-
-			c.beginPath();
-			c.moveTo(-topW + cornerR, potTop + rimH);
-			c.lineTo(topW - cornerR, potTop + rimH);
-			c.quadraticCurveTo(topW, potTop + rimH + 8, botW, potBot - cornerR);
-			c.quadraticCurveTo(botW, potBot, botW - cornerR, potBot);
-			c.lineTo(-botW + cornerR, potBot);
-			c.quadraticCurveTo(-botW, potBot, -topW, potTop + rimH + 8);
-			c.closePath();
-			c.fillStyle = 'rgb(234, 206, 138)';
-			c.fill();
-
-			const rimW = topW + 8;
-			const rimTop = potTop;
-			const rimBot = potTop + rimH;
-			const rimR = 6;
-
-			c.beginPath();
-			c.moveTo(-rimW + rimR, rimTop + 3);
-			c.lineTo(rimW - rimR, rimTop + 3);
-			c.quadraticCurveTo(rimW + 2, rimTop + 3, rimW + 2, rimBot + 1);
-			c.lineTo(-rimW - 2, rimBot + 1);
-			c.quadraticCurveTo(-rimW - 2, rimTop + 3, -rimW + rimR, rimTop + 3);
-			c.closePath();
-			c.fillStyle = 'rgb(200, 170, 100)';
-			c.fill();
-
-			c.beginPath();
-			c.moveTo(-rimW + rimR, rimTop);
-			c.lineTo(rimW - rimR, rimTop);
-			c.quadraticCurveTo(rimW, rimTop, rimW, rimTop + rimH * 0.5);
-			c.quadraticCurveTo(rimW, rimBot, rimW - rimR, rimBot);
-			c.lineTo(-rimW + rimR, rimBot);
-			c.quadraticCurveTo(-rimW, rimBot, -rimW, rimTop + rimH * 0.5);
-			c.quadraticCurveTo(-rimW, rimTop, -rimW + rimR, rimTop);
-			c.closePath();
-			c.fillStyle = 'rgb(224, 196, 128)';
-			c.fill();
-
-			const ropeY = potTop + rimH + 52;
-			const frac = 52 / (potH - rimH);
-			const ropeHalfW = topW - (topW - botW) * frac - 3;
-
-			c.strokeStyle = 'rgb(160, 120, 60)';
-			c.lineWidth = 3;
-			c.lineCap = 'round';
-
-			c.beginPath();
-			c.moveTo(-ropeHalfW, ropeY);
-			c.quadraticCurveTo(0, ropeY + 3, ropeHalfW, ropeY);
-			c.stroke();
-
-			c.beginPath();
-			c.moveTo(-ropeHalfW, ropeY + 6);
-			c.quadraticCurveTo(0, ropeY + 9, ropeHalfW, ropeY + 6);
-			c.stroke();
-
-			const bowCX = 0;
-			const bowCY = ropeY + 3;
-
-			c.fillStyle = 'rgb(160, 120, 60)';
-
-			c.beginPath();
-			c.moveTo(bowCX - 2, bowCY);
-			c.quadraticCurveTo(bowCX - 26, bowCY - 18, bowCX - 19, bowCY + 2);
-			c.quadraticCurveTo(bowCX - 14, bowCY + 14, bowCX - 2, bowCY + 5);
-			c.closePath();
-			c.fill();
-
-			c.beginPath();
-			c.moveTo(bowCX + 2, bowCY);
-			c.quadraticCurveTo(bowCX + 26, bowCY - 18, bowCX + 19, bowCY + 2);
-			c.quadraticCurveTo(bowCX + 14, bowCY + 14, bowCX + 2, bowCY + 5);
-			c.closePath();
-			c.fill();
-
-			c.beginPath();
-			circle(c, bowCX, bowCY + 2, 5);
-			c.closePath();
-			c.fill();
-
-			c.beginPath();
-			c.moveTo(bowCX - 3, bowCY + 6);
-			c.quadraticCurveTo(bowCX - 16, bowCY + 22, bowCX - 10, bowCY + 32);
-			c.lineWidth = 2.5;
-			c.strokeStyle = 'rgb(160, 120, 60)';
-			c.stroke();
-
-			c.beginPath();
-			c.moveTo(bowCX + 3, bowCY + 6);
-			c.quadraticCurveTo(bowCX + 16, bowCY + 22, bowCX + 10, bowCY + 32);
-			c.stroke();
+		/**
+		 * @param {CanvasRenderingContext2D} c
+		 * @param {number} bounceY
+		 */
+		function drawShadow(c, bounceY) {
+			const shadowScale = 1 - bounceY * 0.003;
+			c.save();
+			c.scale(SCALE, SCALE);
+			c.translate(-SVG_CX, -SVG_CY);
+			c.translate(612, 1122);
+			c.scale(shadowScale, 1);
+			c.translate(-612, -1122);
+			drawSVGGroup(c, 'shadow');
+			c.restore();
 		}
 
 		/**
@@ -646,73 +397,56 @@
 		 * @param {number} blushAlpha
 		 */
 		function drawFace(c, eyeState, blushAlpha) {
-			const eyeY = 18;
-			const eyeX = 22;
-			const eyeR = 14;
-			const irisR = 8;
-			const irisRWide = 10;
-			const highlightR = 3;
-			const blushR = 8;
-			const blushY = 28;
-			const blushXOff = 32;
-			const mouthY = 32;
+			const eyeY = 955;
+			const eyeXL = 420;
+			const eyeXR = 600;
+			const whiteR = 42;
+			const irisR = 30;
+			const irisWide = 36;
+			const highlightR = 10;
 
-			const eyes = [
-				{ cx: -eyeX, cy: eyeY },
-				{ cx: eyeX, cy: eyeY }
-			];
+			for (const ex of [eyeXL, eyeXR]) {
+				c.beginPath();
+				c.arc(ex, eyeY, whiteR, 0, Math.PI * 2);
+				c.fillStyle = '#FFF';
+				c.fill();
 
-			for (const eye of eyes) {
 				if (eyeState === 1) {
 					c.beginPath();
-					circle(c, eye.cx, eye.cy, eyeR);
-					c.fillStyle = 'rgb(255, 255, 255)';
-					c.fill();
-					c.beginPath();
-					c.arc(eye.cx, eye.cy - 2, irisR, 0.1 * Math.PI, 0.9 * Math.PI, false);
+					c.arc(ex, eyeY - 4, irisR, 0.1 * Math.PI, 0.9 * Math.PI);
 					c.strokeStyle = 'rgb(80, 40, 20)';
-					c.lineWidth = 2.5;
+					c.lineWidth = 5;
 					c.lineCap = 'round';
 					c.stroke();
 				} else {
-					let currentIrisR = irisR;
-					let irisOffsetX = 0;
-					if (eyeState === 2) currentIrisR = irisRWide;
-					if (eyeState === 3) irisOffsetX = -4;
-					if (eyeState === 4) irisOffsetX = 4;
-
+					let r = eyeState === 2 ? irisWide : irisR;
+					let ox = eyeState === 3 ? -8 : eyeState === 4 ? 8 : 0;
 					c.beginPath();
-					circle(c, eye.cx, eye.cy, eyeR);
-					c.fillStyle = 'rgb(255, 255, 255)';
+					c.arc(ex + ox, eyeY, r, 0, Math.PI * 2);
+					c.fillStyle = '#2A0D0F';
 					c.fill();
-
 					c.beginPath();
-					circle(c, eye.cx + irisOffsetX, eye.cy, currentIrisR);
-					c.fillStyle = 'rgb(80, 40, 20)';
-					c.fill();
-
-					c.beginPath();
-					circle(c, eye.cx + irisOffsetX + 3, eye.cy - 3, highlightR);
-					c.fillStyle = 'rgb(255, 255, 255)';
+					c.arc(ex + ox + 6, eyeY - 6, highlightR, 0, Math.PI * 2);
+					c.fillStyle = '#FFF';
 					c.fill();
 				}
 			}
 
+			// Cheeks
 			c.beginPath();
-			circle(c, -blushXOff, blushY, blushR);
+			c.arc(380, 1000, 20, 0, Math.PI * 2);
+			c.fillStyle = `rgba(255, 140, 140, ${blushAlpha})`;
+			c.fill();
+			c.beginPath();
+			c.arc(640, 1000, 20, 0, Math.PI * 2);
 			c.fillStyle = `rgba(255, 140, 140, ${blushAlpha})`;
 			c.fill();
 
+			// Mouth
 			c.beginPath();
-			circle(c, blushXOff, blushY, blushR);
-			c.fillStyle = `rgba(255, 140, 140, ${blushAlpha})`;
-			c.fill();
-
-			c.beginPath();
-			c.moveTo(-5, mouthY);
-			c.quadraticCurveTo(0, mouthY + 5, 5, mouthY);
-			c.quadraticCurveTo(0, mouthY + 8, -5, mouthY);
-			c.closePath();
+			c.moveTo(490, 1010);
+			c.quadraticCurveTo(510, 1025, 530, 1010);
+			c.quadraticCurveTo(510, 1035, 490, 1010);
 			c.fillStyle = 'rgb(180, 60, 80)';
 			c.fill();
 		}
@@ -725,17 +459,28 @@
 		function drawPlant(c) {
 			const state = getAnimationState(currentMood, time, idleVariant);
 
+			// Shadow stays on ground (outside bounce transform)
+			drawShadow(c, state.bounceY);
+
 			c.save();
-			c.translate(state.swayX, 30 - state.bounceY);
+			// Animation transforms (canvas space)
+			c.translate(state.swayX, -state.bounceY);
 			c.rotate(state.rotation);
-			drawVines(c, state.vineWave);
-			drawSucculent(c, state.droop);
-			drawPotBody(c);
+			// Map SVG → canvas
+			c.scale(SCALE, SCALE);
+			c.translate(-SVG_CX, -SVG_CY);
+
+			// Draw SVG groups (back to front)
+			drawLeaves(c, state.vineWave, state.droop);
+			drawSVGGroup(c, 'pot');
+			drawSVGGroup(c, 'soil');
+			drawSVGGroup(c, 'highlight');
 			drawFace(c, state.eyeState, state.blushAlpha);
+
 			c.restore();
 
+			// Particles (canvas space, drawn after restore)
 			drawZParticles(c);
-			drawWaterDrops(c);
 			drawSparkles(c);
 			drawConfetti(c);
 		}
@@ -755,7 +500,6 @@
 			}
 
 			updateZParticles(dt);
-			updateWaterDrops(dt);
 			updateSparkles(dt);
 			updateConfetti(dt);
 		}
