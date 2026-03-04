@@ -72,6 +72,10 @@
 			</div>
 		{/if}
 
+		<div class="mb-6 flex justify-center rounded-lg bg-white p-8 shadow">
+			<StreamlingOverlay mood={telemetry?.mood?.currentState ?? 'idle'} />
+		</div>
+
 		<h2 class="mb-4 text-lg font-semibold text-gray-900">Streamling Telemetry</h2>
 
 		{#if poller.loading}
@@ -86,10 +90,6 @@
 				</p>
 			</div>
 		{:else if telemetry}
-			<div class="mb-6 flex justify-center rounded-lg bg-white p-8 shadow">
-				<StreamlingOverlay mood={telemetry.mood.currentState} />
-			</div>
-
 			<div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
 				<div class="flex items-center justify-center rounded-lg bg-white p-6 shadow">
 					<MoodIndicator mood={telemetry.mood.currentState} />
