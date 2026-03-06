@@ -20,9 +20,7 @@
 				? '/models/default.glb'
 				: null
 	);
-	const activeAnimationUrls = $derived(
-		data.characterType === 'custom' ? data.animationUrls : null
-	);
+	const activeAnimationUrls = $derived(data.characterType === 'custom' ? data.animationUrls : null);
 </script>
 
 <div class="overlay-root">

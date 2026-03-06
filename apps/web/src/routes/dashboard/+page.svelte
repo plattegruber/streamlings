@@ -43,9 +43,7 @@
 				? '/models/default.glb'
 				: null
 	);
-	const activeAnimationUrls = $derived(
-		data.characterType === 'custom' ? data.animationUrls : null
-	);
+	const activeAnimationUrls = $derived(data.characterType === 'custom' ? data.animationUrls : null);
 </script>
 
 <div class="min-h-screen bg-gray-50">
