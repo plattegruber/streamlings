@@ -123,7 +123,7 @@
 					style="width: {progress}%"
 				></div>
 			</div>
-			<p class="text-xs text-gray-500">This usually takes 3-5 minutes</p>
+			<p class="text-xs text-gray-500">This usually takes 5-10 minutes</p>
 		</div>
 	{:else if errorMessage}
 		<!-- Error state -->

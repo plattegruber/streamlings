@@ -19,7 +19,7 @@ import {
 	getRiggingTask,
 	createAnimationTask,
 	getAnimationTask,
-	ANIMATION_IDS
+	ANIMATION_SEQUENCE
 } from '$lib/server/meshy.js';
 
 /**
@@ -197,11 +197,12 @@ async function handleRigging(db, apiKey, record, platform) {
 			'running'
 		);
 
-		// Start idle animation
+		// Start first animation from sequence
+		const firstAnim = ANIMATION_SEQUENCE[0];
 		const { taskId: animTaskId } = await createAnimationTask(
 			apiKey,
 			record.meshyRigTaskId ?? record.meshyTaskId,
-			ANIMATION_IDS.idle
+			firstAnim.actionId
 		);
 
 		/** @type {Record<string, string>} */
@@ -236,7 +237,7 @@ async function handleRigging(db, apiKey, record, platform) {
 }
 
 /**
- * Handle the animating stage: poll animation task, advance through idle → dancing → ready.
+ * Handle the animating stage: poll animation task, advance through ANIMATION_SEQUENCE → ready.
  * @param {any} db
  * @param {string} apiKey
  * @param {any} record
@@ -253,21 +254,33 @@ async function handleAnimating(db, apiKey, record, platform) {
 		/** @type {Record<string, string>} */
 		const animUrls = record.animationUrls ? JSON.parse(record.animationUrls) : {};
 
-		if (!animUrls.idle) {
-			// Just completed the idle animation — store it and request dancing
-			const idleUrl = await storeGlb(platform, record.id, task.result.animation_glb_url, 'idle');
-			animUrls.idle = idleUrl;
+		// Find which animation just completed (the first one not yet in animUrls)
+		const justCompleted = ANIMATION_SEQUENCE.find((a) => !animUrls[a.key]);
+		if (justCompleted) {
+			const storedUrl = await storeGlb(
+				platform,
+				record.id,
+				task.result.animation_glb_url,
+				justCompleted.key
+			);
+			animUrls[justCompleted.key] = storedUrl;
+		}
 
-			const { taskId: danceTaskId } = await createAnimationTask(
+		// Find the next animation to request
+		const nextAnim = ANIMATION_SEQUENCE.find((a) => !animUrls[a.key]);
+
+		if (nextAnim) {
+			// Request next animation
+			const { taskId } = await createAnimationTask(
 				apiKey,
 				record.meshyRigTaskId,
-				ANIMATION_IDS.dancing
+				nextAnim.actionId
 			);
 
 			await db
 				.update(streamling)
 				.set({
-					meshyTaskId: danceTaskId,
+					meshyTaskId: taskId,
 					animationUrls: JSON.stringify(animUrls)
 				})
 				.where(eq(streamling.id, record.id))
@@ -281,15 +294,7 @@ async function handleAnimating(db, apiKey, record, platform) {
 			});
 		}
 
-		// Just completed the dancing animation — all done!
-		const dancingUrl = await storeGlb(
-			platform,
-			record.id,
-			task.result.animation_glb_url,
-			'dancing'
-		);
-		animUrls.dancing = dancingUrl;
-
+		// All animations complete
 		await db
 			.update(streamling)
 			.set({
