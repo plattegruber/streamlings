@@ -255,3 +255,14 @@ Runs an automated Claude-powered code review on pull requests.
 
 - **Web app**: Cloudflare Pages (via @sveltejs/adapter-cloudflare)
 - **Worker**: Cloudflare Workers with Durable Objects enabled
+
+## Push Workflow
+
+When asked to "push" changes, follow this full workflow — do not report back until every step succeeds:
+
+1. Create a feature branch and open a PR against `main` (never push directly to `main`)
+2. Watch all PR checks (tests, type checking, linting) — wait for them to complete
+3. If any check fails, fix the issue, push the fix, and watch checks again — repeat until green
+4. Merge the PR once all checks pass
+5. Watch the post-merge CI/CD (deploy workflows) complete successfully
+6. Only after everything is green, report back with the result

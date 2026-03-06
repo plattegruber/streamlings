@@ -22,6 +22,20 @@
       "when": 1772748971239,
       "tag": "0002_groovy_magneto",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1772816116307,
+      "tag": "0003_dark_mojo",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1772817346049,
+      "tag": "0004_thick_psylocke",
+      "breakpoints": true
     }
   ]
 }

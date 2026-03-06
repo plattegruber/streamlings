@@ -4,7 +4,7 @@
 	import StreamlingOverlay from '$lib/components/StreamlingOverlay.svelte';
 	import StreamlingOverlay3D from '$lib/components/StreamlingOverlay3D.svelte';
 
-	/** @type {{ data: { workerUrl: string, streamerId: string, characterType: string, modelUrl: string | null } }} */
+	/** @type {{ data: { workerUrl: string, streamerId: string, characterType: string, modelUrl: string | null, animationUrls: Record<string, string> | null } }} */
 	let { data } = $props();
 
 	const ws = createWebSocketTelemetry(data.workerUrl, data.streamerId);
@@ -24,7 +24,7 @@
 
 <div class="overlay-root">
 	{#if activeModelUrl}
-		<StreamlingOverlay3D {mood} modelUrl={activeModelUrl} />
+		<StreamlingOverlay3D {mood} modelUrl={activeModelUrl} animationUrls={data.animationUrls} />
 	{:else}
 		<StreamlingOverlay {mood} />
 	{/if}

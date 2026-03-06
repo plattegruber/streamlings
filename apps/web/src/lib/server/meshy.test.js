@@ -5,8 +5,8 @@ describe('buildPrompt', () => {
 	it('wraps user input in style template', () => {
 		const result = buildPrompt('dinosaur');
 		expect(result).toContain('dinosaur');
-		expect(result).toContain('no face');
 		expect(result).toContain('kawaii');
+		expect(result).toContain('T-pose');
 	});
 
 	it('trims whitespace from user input', () => {

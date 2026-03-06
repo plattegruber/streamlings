@@ -8,6 +8,7 @@ export const load = async ({ params, platform, locals }) => {
 
 	let modelUrl: string | null = null;
 	let characterType = 'default-3d';
+	let animationUrls: Record<string, string> | null = null;
 
 	try {
 		const db = locals.db;
@@ -19,8 +20,16 @@ export const load = async ({ params, platform, locals }) => {
 				.get();
 			if (record) {
 				characterType = record.characterType;
+				const base = `/api/streamling/model?streamerId=${encodeURIComponent(params.id)}`;
 				if (record.modelUrl) {
-					modelUrl = `/api/streamling/model?streamerId=${encodeURIComponent(params.id)}`;
+					modelUrl = base;
+				}
+				if (record.animationUrls) {
+					const parsed: Record<string, string> = JSON.parse(record.animationUrls);
+					animationUrls = {};
+					for (const [key, url] of Object.entries(parsed)) {
+						if (url) animationUrls[key] = `${base}&type=${key}`;
+					}
 				}
 			}
 		}
@@ -32,6 +41,7 @@ export const load = async ({ params, platform, locals }) => {
 		workerUrl,
 		streamerId: params.id,
 		characterType,
-		modelUrl
+		modelUrl,
+		animationUrls
 	};
 };
