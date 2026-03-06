@@ -73,3 +73,9 @@ playwright-report/
 # Cloudflare Workers
 worker-configuration.d.ts
 .wrangler/
+
+# Playwright MCP (ephemeral logs and screenshots)
+.playwright-mcp/
+
+# Claude Code worktrees
+.claude/worktrees/
