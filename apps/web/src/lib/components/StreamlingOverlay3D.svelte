@@ -121,7 +121,12 @@
 
 				model.updateMatrixWorld(true);
 				const worldBox = new THREE.Box3().setFromObject(model);
-				console.log('[3D Debug] world box min:', worldBox.min.toArray(), 'max:', worldBox.max.toArray());
+				console.log(
+					'[3D Debug] world box min:',
+					worldBox.min.toArray(),
+					'max:',
+					worldBox.max.toArray()
+				);
 				console.log('[3D Debug] camera pos:', camera.position.toArray());
 
 				// If the model itself has animations (e.g. rigged GLB), set up mixer
