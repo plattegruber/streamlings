@@ -61,6 +61,7 @@
 		// --- Load GLB model ---
 		/** @type {THREE.Object3D | null} */
 		let model = null;
+		let modelBaseY = 0;
 
 		// --- Skeletal animation state ---
 		/** @type {THREE.AnimationMixer | null} */
@@ -104,17 +105,24 @@
 				const maxDim = Math.max(size.x, size.y, size.z);
 				const scale = 2 / maxDim;
 
+				console.log('[3D Debug] original box min:', box.min.toArray(), 'max:', box.max.toArray());
+				console.log('[3D Debug] center:', center.toArray(), 'size:', size.toArray());
+				console.log('[3D Debug] maxDim:', maxDim, 'scale:', scale);
+
 				model.scale.setScalar(scale);
-				model.position.set(-center.x * scale, -box.min.y * scale, -center.z * scale);
+				modelBaseY = -center.y * scale;
+				model.position.set(-center.x * scale, modelBaseY, -center.z * scale);
 
 				scene.add(model);
 
-				// Center camera on the model's vertical midpoint (computed mathematically
-				// since setFromObject can give wrong results for skinned/rigged meshes)
-				const height = size.y * scale;
-				const midY = height / 2;
-				camera.position.set(0, midY, 5);
-				camera.lookAt(0, midY, 0);
+				// Camera looks at origin — model is centered there
+				camera.position.set(0, 0, 5);
+				camera.lookAt(0, 0, 0);
+
+				model.updateMatrixWorld(true);
+				const worldBox = new THREE.Box3().setFromObject(model);
+				console.log('[3D Debug] world box min:', worldBox.min.toArray(), 'max:', worldBox.max.toArray());
+				console.log('[3D Debug] camera pos:', camera.position.toArray());
 
 				// If the model itself has animations (e.g. rigged GLB), set up mixer
 				if (animationUrls && Object.keys(animationUrls).length > 0) {
@@ -250,7 +258,7 @@
 					mixer.update(dt);
 				} else {
 					// Procedural fallback (no animations available)
-					model.position.y = -0 + state.bounceY * 0.02;
+					model.position.y = modelBaseY + state.bounceY * 0.02;
 					model.rotation.z = Math.sin(time * 1.5) * 0.03 + state.rotation;
 					if (currentMood > 2.5) {
 						model.rotation.y = Math.sin(time * 4) * 0.15;
