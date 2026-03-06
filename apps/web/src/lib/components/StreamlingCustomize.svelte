@@ -12,7 +12,14 @@
 	let progress = $state(0);
 	let stageLabel = $state('');
 
-	const isActive = $derived(status === 'pending' || status === 'preview' || status === 'refining' || status === 'rigging' || status === 'animating' || status === 'retrying');
+	const isActive = $derived(
+		status === 'pending' ||
+			status === 'preview' ||
+			status === 'refining' ||
+			status === 'rigging' ||
+			status === 'animating' ||
+			status === 'retrying'
+	);
 
 	$effect(() => {
 		if (!isActive) return;

@@ -90,7 +90,11 @@
 
 		<div class="mb-6 flex justify-center rounded-lg bg-white p-8 shadow">
 			{#if activeModelUrl}
-				<StreamlingOverlay3D mood={effectiveMood} modelUrl={activeModelUrl} animationUrls={data.animationUrls} />
+				<StreamlingOverlay3D
+					mood={effectiveMood}
+					modelUrl={activeModelUrl}
+					animationUrls={data.animationUrls}
+				/>
 			{:else}
 				<StreamlingOverlay mood={effectiveMood} />
 			{/if}

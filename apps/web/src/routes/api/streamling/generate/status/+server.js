@@ -255,12 +255,7 @@ async function handleAnimating(db, apiKey, record, platform) {
 
 		if (!animUrls.idle) {
 			// Just completed the idle animation — store it and request dancing
-			const idleUrl = await storeGlb(
-				platform,
-				record.id,
-				task.result.animation_glb_url,
-				'idle'
-			);
+			const idleUrl = await storeGlb(platform, record.id, task.result.animation_glb_url, 'idle');
 			animUrls.idle = idleUrl;
 
 			const { taskId: danceTaskId } = await createAnimationTask(
