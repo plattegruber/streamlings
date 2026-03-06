@@ -202,8 +202,24 @@ export async function getRiggingTask(apiKey, taskId) {
 /** Well-known animation action IDs from the Meshy animation library. */
 export const ANIMATION_IDS = {
 	idle: 0,
-	dancing: 22
+	dozing: 38,
+	happy_jump: 44,
+	dancing_01: 22,
+	dancing_02: 23,
+	gangnam: 74,
+	boom_dance: 66
 };
+
+/** Ordered sequence of animations to request in the generation pipeline. */
+export const ANIMATION_SEQUENCE = [
+	{ key: 'dozing', actionId: 38 },
+	{ key: 'idle', actionId: 0 },
+	{ key: 'happy_jump', actionId: 44 },
+	{ key: 'dancing_01', actionId: 22 },
+	{ key: 'dancing_02', actionId: 23 },
+	{ key: 'gangnam', actionId: 74 },
+	{ key: 'boom_dance', actionId: 66 }
+];
 
 /**
  * @typedef {object} AnimationResult

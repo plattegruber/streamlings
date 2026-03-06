@@ -72,21 +72,24 @@
 		let activeAction = null;
 		let useSkeletal = false;
 
-		/** Mood name → animation clip key */
-		const MOOD_ANIM_MAP = /** @type {Record<string, string>} */ ({
-			sleeping: 'idle',
-			idle: 'idle',
-			engaged: 'walking',
-			partying: 'dancing'
+		/** Mood name → candidate animation clip keys (random pick) */
+		const MOOD_ANIM_MAP = /** @type {Record<string, string[]>} */ ({
+			sleeping: ['dozing'],
+			idle: ['idle'],
+			engaged: ['walking', 'happy_jump'],
+			partying: ['dancing_01', 'dancing_02', 'gangnam', 'boom_dance']
 		});
 
 		/** Mood name → animation timeScale */
 		const MOOD_SPEED_MAP = /** @type {Record<string, number>} */ ({
-			sleeping: 0.3,
+			sleeping: 0.7,
 			idle: 1.0,
 			engaged: 1.0,
 			partying: 1.0
 		});
+
+		/** Track last picked animation key to avoid repeats */
+		let lastPickedKey = '';
 
 		const loader = new GLTFLoader();
 
@@ -171,14 +174,41 @@
 		}
 
 		/**
-		 * Crossfade to the animation clip for the given mood.
+		 * Crossfade to a random available animation clip for the given mood.
 		 * @param {string} moodName
 		 */
 		function switchAnimation(moodName) {
-			const clipKey = MOOD_ANIM_MAP[moodName] ?? 'idle';
-			const newAction = actions[clipKey];
-			if (!newAction || newAction === activeAction) {
-				// Just update speed if same action
+			const candidates = MOOD_ANIM_MAP[moodName] ?? ['idle'];
+			// Filter to only clips that were actually loaded
+			const available = candidates.filter((key) => actions[key]);
+
+			if (available.length === 0) {
+				// Fallback to idle if none of the mood's clips loaded
+				if (actions['idle'] && actions['idle'] !== activeAction) {
+					const fallback = actions['idle'];
+					fallback.timeScale = MOOD_SPEED_MAP[moodName] ?? 1.0;
+					if (activeAction) {
+						fallback.reset();
+						fallback.play();
+						activeAction.crossFadeTo(fallback, 0.5, true);
+					} else {
+						fallback.play();
+					}
+					activeAction = fallback;
+				}
+				return;
+			}
+
+			// Pick a random clip, avoiding the same one twice in a row
+			let pick = available[Math.floor(Math.random() * available.length)];
+			if (available.length > 1 && pick === lastPickedKey) {
+				const others = available.filter((k) => k !== lastPickedKey);
+				pick = others[Math.floor(Math.random() * others.length)];
+			}
+			lastPickedKey = pick;
+
+			const newAction = actions[pick];
+			if (newAction === activeAction) {
 				if (activeAction) {
 					activeAction.timeScale = MOOD_SPEED_MAP[moodName] ?? 1.0;
 				}
