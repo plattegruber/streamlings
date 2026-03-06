@@ -61,7 +61,6 @@
 		// --- Load GLB model ---
 		/** @type {THREE.Object3D | null} */
 		let model = null;
-		let modelHeight = 2;
 
 		const loader = new GLTFLoader();
 		loader.load(
@@ -78,8 +77,6 @@
 
 				model.scale.setScalar(scale);
 				model.position.set(-center.x * scale, -box.min.y * scale, -center.z * scale);
-
-				modelHeight = size.y * scale;
 
 				scene.add(model);
 			},
@@ -129,7 +126,7 @@
 			// Animate model
 			if (model) {
 				// Bounce
-				model.position.y = (-0 + state.bounceY * 0.02);
+				model.position.y = -0 + state.bounceY * 0.02;
 				// Sway/rotation
 				model.rotation.z = Math.sin(time * 1.5) * 0.03 + state.rotation;
 				// Party wiggle

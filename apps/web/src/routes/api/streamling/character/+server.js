@@ -29,11 +29,7 @@ export async function PUT({ locals, request }) {
 		throw error(400, `Invalid character type. Must be one of: ${VALID_TYPES.join(', ')}`);
 	}
 
-	const record = await db
-		.select()
-		.from(streamling)
-		.where(eq(streamling.streamerId, userId))
-		.get();
+	const record = await db.select().from(streamling).where(eq(streamling.streamerId, userId)).get();
 
 	if (!record) {
 		throw error(404, 'No streamling found. Connect Twitch first.');
@@ -43,11 +39,7 @@ export async function PUT({ locals, request }) {
 		throw error(400, 'Custom model not ready. Generate one first.');
 	}
 
-	await db
-		.update(streamling)
-		.set({ characterType })
-		.where(eq(streamling.id, record.id))
-		.run();
+	await db.update(streamling).set({ characterType }).where(eq(streamling.id, record.id)).run();
 
 	return json({ characterType });
 }

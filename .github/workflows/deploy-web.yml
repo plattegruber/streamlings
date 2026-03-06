@@ -115,12 +115,13 @@ jobs:
 
       - name: Ensure R2 bucket exists
         if: steps.cf-creds.outputs.present == 'true'
+        continue-on-error: true
         working-directory: apps/web
         shell: bash
         run: |
           set -euo pipefail
 
-          if pnpm exec wrangler r2 bucket list --json | grep -q '"name":"streamlings-models"'; then
+          if pnpm exec wrangler r2 bucket list 2>/dev/null | grep -q 'streamlings-models'; then
             echo "R2 bucket streamlings-models already exists."
           else
             echo "Creating R2 bucket streamlings-models..."

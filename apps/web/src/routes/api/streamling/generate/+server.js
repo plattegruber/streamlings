@@ -33,11 +33,7 @@ export async function POST({ locals, request, platform }) {
 		throw error(400, 'Prompt must be 1-100 characters');
 	}
 
-	const record = await db
-		.select()
-		.from(streamling)
-		.where(eq(streamling.streamerId, userId))
-		.get();
+	const record = await db.select().from(streamling).where(eq(streamling.streamerId, userId)).get();
 
 	if (!record) {
 		throw error(404, 'No streamling found. Connect Twitch first.');
