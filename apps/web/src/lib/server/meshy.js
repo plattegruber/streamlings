@@ -11,7 +11,7 @@ const MESHY_RIGGING = 'https://api.meshy.ai/openapi/v1/rigging';
 const MESHY_ANIMATIONS = 'https://api.meshy.ai/openapi/v1/animations';
 
 const STYLE_TEMPLATE =
-	'Cute kawaii chibi {input}, simple cartoon style, round proportions, small body, large head, no face, smooth surface, single solid character, centered, clean geometry, bipedal with clearly defined arms and legs, standing in T-pose';
+	'Cute kawaii chibi {input}, simple cartoon style, round proportions, small body, large head, smooth surface, single solid character, centered, clean geometry, bipedal with clearly defined arms and legs, standing in T-pose';
 
 /**
  * Wraps user input in a style-consistent prompt template.

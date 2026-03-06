@@ -3,7 +3,6 @@
 	import * as THREE from 'three';
 	import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 	import { moodToNumber, getAnimationState } from '$lib/rendering/mood-animation.js';
-	import { drawFace } from '$lib/rendering/face.js';
 	import {
 		updateZParticles,
 		drawZParticles,
@@ -261,22 +260,6 @@
 			ctx.setTransform(1, 0, 0, 1, 0, 0);
 			ctx.clearRect(0, 0, SIZE, SIZE);
 			ctx.restore();
-
-			// Draw face on 2D overlay
-			if (model) {
-				const box = new THREE.Box3().setFromObject(model);
-				const faceY = box.min.y + (box.max.y - box.min.y) * 0.7;
-				const faceZ = box.max.z + 0.1;
-
-				const faceWorldPos = new THREE.Vector3(0, faceY, faceZ);
-				faceWorldPos.project(camera);
-
-				const screenX = (faceWorldPos.x * 0.5 + 0.5) * SIZE;
-				const screenY = (-faceWorldPos.y * 0.5 + 0.5) * SIZE;
-
-				const faceScale = 0.4;
-				drawFace(ctx, screenX, screenY, faceScale, state.eyeState, state.blushAlpha);
-			}
 
 			// Draw particles on 2D overlay (centered)
 			ctx.save();
