@@ -54,7 +54,9 @@ export async function POST({ locals, request, platform }) {
 			meshyTaskId: taskId,
 			modelPrompt: prompt,
 			modelUrl: null,
-			modelRetries: 0
+			modelRetries: 0,
+			meshyRigTaskId: null,
+			animationUrls: null
 		})
 		.where(eq(streamling.id, record.id))
 		.run();
