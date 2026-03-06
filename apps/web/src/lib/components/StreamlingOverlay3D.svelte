@@ -37,8 +37,8 @@
 		const scene = new THREE.Scene();
 		const camera = new THREE.PerspectiveCamera(30, 1, 0.1, 100);
 		// Camera position is updated after model loads to center on the model
-		camera.position.set(0, 1, 5);
-		camera.lookAt(0, 1, 0);
+		camera.position.set(0, 0, 5.5);
+		camera.lookAt(0, 0, 0);
 
 		const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
 		scene.add(ambientLight);
@@ -105,10 +105,6 @@
 				const maxDim = Math.max(size.x, size.y, size.z);
 				const scale = 2 / maxDim;
 
-				console.log('[3D Debug] original box min:', box.min.toArray(), 'max:', box.max.toArray());
-				console.log('[3D Debug] center:', center.toArray(), 'size:', size.toArray());
-				console.log('[3D Debug] maxDim:', maxDim, 'scale:', scale);
-
 				model.scale.setScalar(scale);
 				modelBaseY = -center.y * scale;
 				model.position.set(-center.x * scale, modelBaseY, -center.z * scale);
@@ -116,18 +112,8 @@
 				scene.add(model);
 
 				// Camera looks at origin — model is centered there
-				camera.position.set(0, 0, 5);
+				camera.position.set(0, 0, 5.5);
 				camera.lookAt(0, 0, 0);
-
-				model.updateMatrixWorld(true);
-				const worldBox = new THREE.Box3().setFromObject(model);
-				console.log(
-					'[3D Debug] world box min:',
-					worldBox.min.toArray(),
-					'max:',
-					worldBox.max.toArray()
-				);
-				console.log('[3D Debug] camera pos:', camera.position.toArray());
 
 				// If the model itself has animations (e.g. rigged GLB), set up mixer
 				if (animationUrls && Object.keys(animationUrls).length > 0) {
