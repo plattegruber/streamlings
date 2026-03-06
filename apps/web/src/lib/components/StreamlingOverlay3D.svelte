@@ -36,8 +36,9 @@
 		// --- Three.js setup ---
 		const scene = new THREE.Scene();
 		const camera = new THREE.PerspectiveCamera(30, 1, 0.1, 100);
+		// Camera position is updated after model loads to center on the model
 		camera.position.set(0, 1, 5);
-		camera.lookAt(0, 0.8, 0);
+		camera.lookAt(0, 1, 0);
 
 		const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
 		scene.add(ambientLight);
@@ -107,6 +108,12 @@
 				model.position.set(-center.x * scale, -box.min.y * scale, -center.z * scale);
 
 				scene.add(model);
+
+				// Center camera on the model's vertical midpoint
+				const scaledBox = new THREE.Box3().setFromObject(model);
+				const midY = (scaledBox.min.y + scaledBox.max.y) / 2;
+				camera.position.set(0, midY, 5);
+				camera.lookAt(0, midY, 0);
 
 				// If the model itself has animations (e.g. rigged GLB), set up mixer
 				if (animationUrls && Object.keys(animationUrls).length > 0) {
