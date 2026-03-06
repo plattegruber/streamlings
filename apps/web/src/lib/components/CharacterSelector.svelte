@@ -65,7 +65,7 @@
 <div class="rounded-lg bg-white p-6 shadow">
 	<h3 class="mb-4 text-lg font-semibold text-gray-900">Choose Character</h3>
 	<div class="flex gap-3">
-		{#each options as option}
+		{#each options as option (option.type)}
 			<button
 				onclick={() => option.available && selectCharacter(option.type)}
 				disabled={!option.available || updating}

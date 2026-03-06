@@ -23,11 +23,7 @@ export async function GET({ locals, platform }) {
 		throw error(503, 'Database unavailable');
 	}
 
-	const record = await db
-		.select()
-		.from(streamling)
-		.where(eq(streamling.streamerId, userId))
-		.get();
+	const record = await db.select().from(streamling).where(eq(streamling.streamerId, userId)).get();
 
 	if (!record) {
 		throw error(404, 'No streamling found');

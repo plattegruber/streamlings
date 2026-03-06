@@ -23,7 +23,11 @@ declare global {
 				R2_PUBLIC_URL?: string;
 				// R2 bucket binding (available in Cloudflare production)
 				MODELS_BUCKET?: {
-					put(key: string, value: ArrayBuffer | ReadableStream, options?: Record<string, unknown>): Promise<unknown>;
+					put(
+						key: string,
+						value: ArrayBuffer | ReadableStream,
+						options?: Record<string, unknown>
+					): Promise<unknown>;
 					get(key: string): Promise<unknown>;
 				};
 			};

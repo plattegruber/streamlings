@@ -102,10 +102,7 @@
 
 		{#if user}
 			<div class="mb-6">
-				<CharacterSelector
-					characterType={data.characterType}
-					modelStatus={data.modelStatus}
-				/>
+				<CharacterSelector characterType={data.characterType} modelStatus={data.modelStatus} />
 			</div>
 
 			<div class="mb-6">
