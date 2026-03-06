@@ -43,7 +43,12 @@ beforeEach(() => {
 			id TEXT PRIMARY KEY,
 			streamer_id TEXT NOT NULL UNIQUE REFERENCES streamer(id),
 			durable_object_id TEXT NOT NULL,
-			created_at INTEGER NOT NULL
+			created_at INTEGER NOT NULL,
+			character_type TEXT NOT NULL DEFAULT 'default-3d',
+			model_url TEXT,
+			model_prompt TEXT,
+			model_status TEXT,
+			meshy_task_id TEXT
 		);
 	`);
 });

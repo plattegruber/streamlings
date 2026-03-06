@@ -2,8 +2,9 @@
 	import { onDestroy } from 'svelte';
 	import { createWebSocketTelemetry } from '$lib/ws-telemetry.svelte.js';
 	import StreamlingOverlay from '$lib/components/StreamlingOverlay.svelte';
+	import StreamlingOverlay3D from '$lib/components/StreamlingOverlay3D.svelte';
 
-	/** @type {{ data: { workerUrl: string, streamerId: string } }} */
+	/** @type {{ data: { workerUrl: string, streamerId: string, characterType: string, modelUrl: string | null } }} */
 	let { data } = $props();
 
 	const ws = createWebSocketTelemetry(data.workerUrl, data.streamerId);
@@ -11,10 +12,22 @@
 
 	const telemetry = $derived(ws.data);
 	const mood = $derived(telemetry?.mood?.currentState ?? 'idle');
+
+	const activeModelUrl = $derived(
+		data.characterType === 'custom'
+			? data.modelUrl
+			: data.characterType === 'default-3d'
+				? '/models/default.glb'
+				: null
+	);
 </script>
 
 <div class="overlay-root">
-	<StreamlingOverlay {mood} />
+	{#if activeModelUrl}
+		<StreamlingOverlay3D {mood} modelUrl={activeModelUrl} />
+	{:else}
+		<StreamlingOverlay {mood} />
+	{/if}
 </div>
 
 <style>

@@ -85,6 +85,48 @@ jobs:
           pnpm exec wrangler d1 info streamlings-db >/dev/null
           pnpm exec wrangler d1 info streamlings-db-preview >/dev/null
 
+      - name: Apply D1 migrations
+        if: steps.cf-creds.outputs.present == 'true'
+        working-directory: apps/web
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          CLEAN_DIR=$(mktemp -d)
+          trap 'rm -rf "$CLEAN_DIR"' EXIT
+
+          # Strip Drizzle's --> statement-breakpoint markers so D1 can execute cleanly
+          for sql_file in drizzle/*.sql; do
+            clean_file="${CLEAN_DIR}/$(basename "$sql_file")"
+            sed 's/--> statement-breakpoint//' "$sql_file" > "$clean_file"
+          done
+
+          for clean_file in "$CLEAN_DIR"/*.sql; do
+            base=$(basename "$clean_file")
+
+            echo "Applying ${base} to preview..."
+            pnpm exec wrangler d1 execute streamlings-db-preview --remote --yes --file="$clean_file" \
+              2>&1 || echo "⚠ Preview migration may already be applied: ${base}"
+
+            echo "Applying ${base} to production..."
+            pnpm exec wrangler d1 execute streamlings-db --remote --yes --file="$clean_file" \
+              2>&1 || echo "⚠ Production migration may already be applied: ${base}"
+          done
+
+      - name: Ensure R2 bucket exists
+        if: steps.cf-creds.outputs.present == 'true'
+        working-directory: apps/web
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if pnpm exec wrangler r2 bucket list --json | grep -q '"name":"streamlings-models"'; then
+            echo "R2 bucket streamlings-models already exists."
+          else
+            echo "Creating R2 bucket streamlings-models..."
+            pnpm exec wrangler r2 bucket create streamlings-models
+          fi
+
       - name: Deploy to Cloudflare Pages (preview)
         if: steps.cf-creds.outputs.present == 'true'
         id: deploy-preview

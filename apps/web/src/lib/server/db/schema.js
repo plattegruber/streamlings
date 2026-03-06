@@ -49,5 +49,12 @@ export const streamling = sqliteTable('streamling', {
 	durableObjectId: text('durable_object_id').notNull(),
 	createdAt: integer('created_at', { mode: 'timestamp' })
 		.notNull()
-		.$defaultFn(() => new Date())
+		.$defaultFn(() => new Date()),
+	// Character type: 'plant' | 'default-3d' | 'custom'
+	characterType: text('character_type').notNull().default('default-3d'),
+	// 3D model generation fields (null = default 2D plant)
+	modelUrl: text('model_url'),
+	modelPrompt: text('model_prompt'),
+	modelStatus: text('model_status'),
+	meshyTaskId: text('meshy_task_id')
 });

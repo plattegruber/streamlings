@@ -11,11 +11,15 @@
 	import ActivityFeed from '$lib/components/ActivityFeed.svelte';
 	import TwitchConnection from '$lib/components/TwitchConnection.svelte';
 	import StreamlingOverlay from '$lib/components/StreamlingOverlay.svelte';
+	import StreamlingOverlay3D from '$lib/components/StreamlingOverlay3D.svelte';
+	import StreamlingCustomize from '$lib/components/StreamlingCustomize.svelte';
+	import CharacterSelector from '$lib/components/CharacterSelector.svelte';
+	import MoodPreview from '$lib/components/MoodPreview.svelte';
 
 	const ctx = useClerkContext();
 	const user = $derived(ctx.user);
 
-	/** @type {{ data: { workerUrl: string, streamerId: string, twitchConnection: { connected: boolean, twitchUsername: string|null } } }} */
+	/** @type {{ data: { workerUrl: string, streamerId: string, twitchConnection: { connected: boolean, twitchUsername: string|null }, characterType: string, modelUrl: string|null, modelStatus: string|null, modelPrompt: string|null } }} */
 	let { data } = $props();
 
 	const poller = createTelemetryPoller(data.workerUrl, data.streamerId);
@@ -27,6 +31,18 @@
 
 	const telemetry = $derived(poller.data);
 	const events = $derived(eventsPoller.data ?? []);
+
+	/** @type {string | null} */
+	let previewMood = $state(null);
+	const effectiveMood = $derived(previewMood ?? telemetry?.mood?.currentState ?? 'idle');
+
+	const activeModelUrl = $derived(
+		data.characterType === 'custom'
+			? data.modelUrl
+			: data.characterType === 'default-3d'
+				? '/models/default.glb'
+				: null
+	);
 </script>
 
 <div class="min-h-screen bg-gray-50">
@@ -73,8 +89,29 @@
 		{/if}
 
 		<div class="mb-6 flex justify-center rounded-lg bg-white p-8 shadow">
-			<StreamlingOverlay mood={telemetry?.mood?.currentState ?? 'idle'} />
+			{#if activeModelUrl}
+				<StreamlingOverlay3D mood={effectiveMood} modelUrl={activeModelUrl} />
+			{:else}
+				<StreamlingOverlay mood={effectiveMood} />
+			{/if}
 		</div>
+
+		<div class="mb-6 flex justify-center">
+			<MoodPreview {previewMood} onchange={(mood) => (previewMood = mood)} />
+		</div>
+
+		{#if user}
+			<div class="mb-6">
+				<CharacterSelector
+					characterType={data.characterType}
+					modelStatus={data.modelStatus}
+				/>
+			</div>
+
+			<div class="mb-6">
+				<StreamlingCustomize status={data.modelStatus} prompt={data.modelPrompt} />
+			</div>
+		{/if}
 
 		<h2 class="mb-4 text-lg font-semibold text-gray-900">Streamling Telemetry</h2>
 

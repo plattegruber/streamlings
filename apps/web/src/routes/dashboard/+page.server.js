@@ -17,6 +17,15 @@ export const load = async ({ locals, platform }) => {
 	/** @type {string} */
 	let streamerId = env.PUBLIC_DEFAULT_STREAMER_ID ?? 'default-streamer';
 
+	/** @type {string | null} */
+	let modelUrl = null;
+	/** @type {string | null} */
+	let modelStatus = null;
+	/** @type {string | null} */
+	let modelPrompt = null;
+	/** @type {string} */
+	let characterType = 'default-3d';
+
 	if (userId && db) {
 		try {
 			const connection = await getTwitchConnection(db, userId);
@@ -27,7 +36,6 @@ export const load = async ({ locals, platform }) => {
 				};
 			}
 
-			// Use the authenticated user's streamling durable object ID if available
 			const userStreamling = await db
 				.select()
 				.from(streamling)
@@ -36,9 +44,15 @@ export const load = async ({ locals, platform }) => {
 
 			if (userStreamling) {
 				streamerId = userStreamling.durableObjectId;
+				characterType = userStreamling.characterType;
+				if (userStreamling.modelUrl) {
+					modelUrl = `/api/streamling/model?streamerId=${encodeURIComponent(userStreamling.durableObjectId)}`;
+				}
+				modelStatus = userStreamling.modelStatus;
+				modelPrompt = userStreamling.modelPrompt;
 			}
 		} catch (err) {
-			console.warn('[dashboard] Failed to load Twitch connection:', err);
+			console.warn('[dashboard] Failed to load data:', err);
 		}
 	}
 
@@ -53,6 +67,10 @@ export const load = async ({ locals, platform }) => {
 	return {
 		workerUrl,
 		streamerId,
-		twitchConnection
+		twitchConnection,
+		characterType,
+		modelUrl,
+		modelStatus,
+		modelPrompt
 	};
 };

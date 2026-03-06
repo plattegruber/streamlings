@@ -19,6 +19,13 @@ declare global {
 				CLERK_SECRET_KEY?: string;
 				PUBLIC_WORKER_URL?: string;
 				PUBLIC_STREAMER_ID?: string;
+				MESHY_API_KEY?: string;
+				R2_PUBLIC_URL?: string;
+				// R2 bucket binding (available in Cloudflare production)
+				MODELS_BUCKET?: {
+					put(key: string, value: ArrayBuffer | ReadableStream, options?: Record<string, unknown>): Promise<unknown>;
+					get(key: string): Promise<unknown>;
+				};
 			};
 		}
 	}

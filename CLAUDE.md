@@ -202,6 +202,7 @@ Events will flow: Twitch CLI → adapter (:8788) → streamling-state (:8787)
    - `TWITCH_REDIRECT_URI`: OAuth callback URL (default: http://localhost:5173/auth/callback)
    - `WORKER_PUBLIC_URL`: Worker URL for EventSub webhooks (default: http://127.0.0.1:8787)
    - `DATABASE_URL`: libSQL database connection string (required for web app)
+   - `MESHY_API_KEY`: Meshy Text-to-3D API key (optional; required for custom streamling generation)
 
 3. For the worker, also configure `wrangler.toml`:
    - Set `TWITCH_CLIENT_ID` in the `[vars]` section

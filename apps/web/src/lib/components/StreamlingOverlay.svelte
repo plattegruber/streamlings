@@ -1,6 +1,15 @@
 <script>
 	import { onMount } from 'svelte';
 	import { groups } from '$lib/assets/streamling-paths.js';
+	import { moodToNumber, getAnimationState } from '$lib/rendering/mood-animation.js';
+	import {
+		updateZParticles,
+		drawZParticles,
+		updateSparkles,
+		drawSparkles,
+		updateConfetti,
+		drawConfetti
+	} from '$lib/rendering/particles.js';
 
 	/**
 	 * @type {{ mood?: string | null }}
@@ -8,24 +17,6 @@
 	let { mood = 'idle' } = $props();
 
 	const safeMood = $derived(mood ?? 'idle');
-
-	/**
-	 * Map mood string to numeric target (0-3).
-	 * @param {string} state
-	 * @returns {number}
-	 */
-	function moodToNumber(state) {
-		switch (state) {
-			case 'sleeping':
-				return 0;
-			case 'engaged':
-				return 2;
-			case 'partying':
-				return 3;
-			default:
-				return 1;
-		}
-	}
 
 	// Mutable variable shared between $effect and the animation loop closure.
 	// The $effect writes to it when the mood prop changes;
@@ -66,281 +57,17 @@
 		let idleTimer = 5;
 
 		// --- Particle Arrays ---
-		/** @type {{ x: number, y: number, life: number, maxLife: number, size: number }[]} */
+		/** @type {import('$lib/rendering/particles.js').ZParticle[]} */
 		let zParticles = [];
-		/** @type {{ x: number, y: number, life: number, maxLife: number, size: number }[]} */
+		/** @type {import('$lib/rendering/particles.js').Sparkle[]} */
 		let sparkles = [];
-		/** @type {{ x: number, y: number, vx: number, vy: number, life: number, maxLife: number, colorIdx: number, size: number, shape: number }[]} */
+		/** @type {import('$lib/rendering/particles.js').ConfettiParticle[]} */
 		let confetti = [];
 
 		// --- Spawn Timers ---
-		let zSpawnTimer = 0;
-		let sparkleSpawnTimer = 0;
-		let confettiSpawnTimer = 0;
-
-		// ================================================================
-		// Helpers
-		// ================================================================
-
-		/** @param {number} a @param {number} b @param {number} t */
-		function lerp(a, b, t) {
-			return a + (b - a) * t;
-		}
-
-		// ================================================================
-		// State Parameters
-		// ================================================================
-
-		/**
-		 * @param {number} state
-		 * @param {number} t
-		 * @param {number} variant
-		 */
-		function getStateParams(state, t, variant) {
-			switch (state) {
-				case 0:
-					return {
-						eyeState: 1,
-						bounceY: Math.sin((t * Math.PI) / 2) * 4,
-						rotation: 0,
-						vineWave: -3,
-						droop: 0.6,
-						perk: 0,
-						blushAlpha: 0.3,
-						swayX: 0
-					};
-				case 1: {
-					let eyeState = 0;
-					let swayX = 0;
-					let vineWave = Math.sin(t * 0.8) * 2;
-					if (variant === 0) {
-						swayX = Math.sin(t * 1.2) * 3;
-						const blinkCycle = t % 4;
-						if (blinkCycle > 3.8 && blinkCycle < 3.95) eyeState = 1;
-					} else if (variant === 1) {
-						vineWave = Math.sin(t * 1.5) * 5;
-						const lookCycle = t % 5;
-						if (lookCycle < 1.5) eyeState = 3;
-						else if (lookCycle < 3) eyeState = 4;
-					} else if (variant === 2) {
-						vineWave = Math.sin(t * 2.5) * 4;
-					}
-					return {
-						eyeState,
-						bounceY: 0,
-						rotation: 0,
-						vineWave,
-						droop: 0,
-						perk: 0,
-						blushAlpha: 0.5,
-						swayX
-					};
-				}
-				case 2:
-					return {
-						eyeState: 2,
-						bounceY: Math.abs(Math.sin((t * Math.PI) / 0.75)) * 8,
-						rotation: 0,
-						vineWave: Math.sin(t * 2) * 6,
-						droop: 0,
-						perk: 0.1,
-						blushAlpha: 0.6,
-						swayX: 0
-					};
-				case 3:
-					return {
-						eyeState: 2,
-						bounceY: Math.abs(Math.sin((t * Math.PI) / 0.4)) * 12,
-						rotation: Math.sin(t * 4) * 0.05,
-						vineWave: Math.sin(t * 3) * 10,
-						droop: 0,
-						perk: 0.15,
-						blushAlpha: 0.9,
-						swayX: 0
-					};
-				default:
-					return getStateParams(1, t, 0);
-			}
-		}
-
-		/**
-		 * @param {number} m
-		 * @param {number} t
-		 * @param {number} variant
-		 */
-		function getAnimationState(m, t, variant) {
-			const lower = Math.floor(Math.max(0, Math.min(3, m)));
-			const upper = Math.min(3, lower + 1);
-			const blend = m - lower;
-			const stateA = getStateParams(lower, t, variant);
-			const stateB = getStateParams(upper, t, variant);
-
-			return {
-				eyeState: blend < 0.5 ? stateA.eyeState : stateB.eyeState,
-				bounceY: lerp(stateA.bounceY, stateB.bounceY, blend),
-				rotation: lerp(stateA.rotation, stateB.rotation, blend),
-				vineWave: lerp(stateA.vineWave, stateB.vineWave, blend),
-				droop: lerp(stateA.droop, stateB.droop, blend),
-				perk: lerp(stateA.perk, stateB.perk, blend),
-				blushAlpha: lerp(stateA.blushAlpha, stateB.blushAlpha, blend),
-				swayX: lerp(stateA.swayX, stateB.swayX, blend)
-			};
-		}
-
-		// ================================================================
-		// Particle Systems
-		// ================================================================
-
-		/** @param {number} dt */
-		function updateZParticles(dt) {
-			zSpawnTimer += dt;
-			const nearSleep = currentMood < 0.5;
-			if (nearSleep && zSpawnTimer >= 1 / 1.5) {
-				zSpawnTimer -= 1 / 1.5;
-				zParticles.push({
-					x: 20 + Math.random() * 10,
-					y: -200,
-					life: 0,
-					maxLife: 2.5,
-					size: 8 + Math.random() * 6
-				});
-			}
-			if (!nearSleep) zSpawnTimer = 0;
-			for (let i = zParticles.length - 1; i >= 0; i--) {
-				const p = zParticles[i];
-				p.life += dt;
-				p.y -= 30 * dt;
-				p.x += Math.sin(p.life * 2) * 15 * dt;
-				if (p.life >= p.maxLife) zParticles.splice(i, 1);
-			}
-		}
-
-		/** @param {CanvasRenderingContext2D} c */
-		function drawZParticles(c) {
-			for (const p of zParticles) {
-				const alpha = 1 - p.life / p.maxLife;
-				c.save();
-				c.globalAlpha = alpha;
-				c.font = `bold ${p.size}px sans-serif`;
-				c.fillStyle = 'rgb(180, 200, 255)';
-				c.fillText('z', p.x, p.y);
-				c.restore();
-			}
-		}
-
-		/** @param {number} dt */
-		function updateSparkles(dt) {
-			sparkleSpawnTimer += dt;
-			const nearEngaged = currentMood >= 1.5 && currentMood < 2.8;
-			if (nearEngaged && sparkleSpawnTimer >= 0.5) {
-				sparkleSpawnTimer -= 0.5;
-				sparkles.push({
-					x: (Math.random() - 0.5) * 200,
-					y: -200 + Math.random() * 300,
-					life: 0,
-					maxLife: 0.8,
-					size: 3 + Math.random() * 4
-				});
-			}
-			if (!nearEngaged) sparkleSpawnTimer = 0;
-			for (let i = sparkles.length - 1; i >= 0; i--) {
-				const p = sparkles[i];
-				p.life += dt;
-				if (p.life >= p.maxLife) sparkles.splice(i, 1);
-			}
-		}
-
-		/**
-		 * @param {CanvasRenderingContext2D} c
-		 * @param {number} x @param {number} y @param {number} size @param {number} alpha
-		 */
-		function drawSparkle(c, x, y, size, alpha) {
-			c.save();
-			c.globalAlpha = alpha;
-			c.fillStyle = 'rgb(255, 230, 100)';
-			c.beginPath();
-			c.moveTo(x, y - size);
-			c.lineTo(x + size * 0.3, y - size * 0.3);
-			c.lineTo(x + size, y);
-			c.lineTo(x + size * 0.3, y + size * 0.3);
-			c.lineTo(x, y + size);
-			c.lineTo(x - size * 0.3, y + size * 0.3);
-			c.lineTo(x - size, y);
-			c.lineTo(x - size * 0.3, y - size * 0.3);
-			c.closePath();
-			c.fill();
-			c.restore();
-		}
-
-		/** @param {CanvasRenderingContext2D} c */
-		function drawSparkles(c) {
-			for (const p of sparkles) {
-				const t = p.life / p.maxLife;
-				const alpha = t < 0.3 ? t / 0.3 : (1 - t) / 0.7;
-				drawSparkle(c, p.x, p.y, p.size, alpha);
-			}
-		}
-
-		const confettiColors = [
-			'rgb(255, 80, 80)',
-			'rgb(80, 140, 255)',
-			'rgb(255, 220, 50)',
-			'rgb(80, 200, 80)'
-		];
-
-		/** @param {number} dt */
-		function updateConfetti(dt) {
-			confettiSpawnTimer += dt;
-			const nearParty = currentMood >= 2.5;
-			if (nearParty && confettiSpawnTimer >= 1 / 8) {
-				confettiSpawnTimer -= 1 / 8;
-				const angle = Math.random() * Math.PI * 2;
-				const speed = 80 + Math.random() * 120;
-				confetti.push({
-					x: (Math.random() - 0.5) * 60,
-					y: -50 + Math.random() * 80,
-					vx: Math.cos(angle) * speed,
-					vy: Math.sin(angle) * speed - 60,
-					life: 0,
-					maxLife: 1.5,
-					colorIdx: Math.floor(Math.random() * 4),
-					size: 3 + Math.random() * 3,
-					shape: Math.floor(Math.random() * 3)
-				});
-			}
-			if (!nearParty) confettiSpawnTimer = 0;
-			for (let i = confetti.length - 1; i >= 0; i--) {
-				const p = confetti[i];
-				p.life += dt;
-				p.vy += 150 * dt;
-				p.x += p.vx * dt;
-				p.y += p.vy * dt;
-				if (p.life >= p.maxLife) confetti.splice(i, 1);
-			}
-		}
-
-		/** @param {CanvasRenderingContext2D} c */
-		function drawConfetti(c) {
-			for (const p of confetti) {
-				const alpha = Math.max(0, 1 - p.life / p.maxLife);
-				c.save();
-				c.globalAlpha = alpha;
-				c.fillStyle = confettiColors[p.colorIdx];
-				c.beginPath();
-				if (p.shape === 0) {
-					c.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-				} else if (p.shape === 1) {
-					c.rect(p.x - p.size, p.y - p.size, p.size * 2, p.size * 2);
-				} else {
-					c.moveTo(p.x, p.y - p.size);
-					c.lineTo(p.x + p.size, p.y + p.size);
-					c.lineTo(p.x - p.size, p.y + p.size);
-					c.closePath();
-				}
-				c.fill();
-				c.restore();
-			}
-		}
+		let zState = { timer: 0 };
+		let sparkleState = { timer: 0 };
+		let confettiState = { timer: 0 };
 
 		// ================================================================
 		// SVG Drawing Functions
@@ -480,9 +207,9 @@
 			c.restore();
 
 			// Particles (canvas space, drawn after restore)
-			drawZParticles(c);
-			drawSparkles(c);
-			drawConfetti(c);
+			drawZParticles(c, zParticles);
+			drawSparkles(c, sparkles);
+			drawConfetti(c, confetti);
 		}
 
 		/** @param {number} dt */
@@ -499,9 +226,9 @@
 				}
 			}
 
-			updateZParticles(dt);
-			updateSparkles(dt);
-			updateConfetti(dt);
+			updateZParticles(zParticles, dt, currentMood, zState);
+			updateSparkles(sparkles, dt, currentMood, sparkleState);
+			updateConfetti(confetti, dt, currentMood, confettiState);
 		}
 
 		/** @param {number} timestamp */
