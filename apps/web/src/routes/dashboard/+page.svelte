@@ -19,7 +19,7 @@
 	const ctx = useClerkContext();
 	const user = $derived(ctx.user);
 
-	/** @type {{ data: { workerUrl: string, streamerId: string, twitchConnection: { connected: boolean, twitchUsername: string|null }, characterType: string, modelUrl: string|null, modelStatus: string|null, modelPrompt: string|null } }} */
+	/** @type {{ data: { workerUrl: string, streamerId: string, twitchConnection: { connected: boolean, twitchUsername: string|null }, characterType: string, modelUrl: string|null, modelStatus: string|null, modelPrompt: string|null, animationUrls: Record<string, string>|null } }} */
 	let { data } = $props();
 
 	const poller = createTelemetryPoller(data.workerUrl, data.streamerId);
@@ -90,7 +90,7 @@
 
 		<div class="mb-6 flex justify-center rounded-lg bg-white p-8 shadow">
 			{#if activeModelUrl}
-				<StreamlingOverlay3D mood={effectiveMood} modelUrl={activeModelUrl} />
+				<StreamlingOverlay3D mood={effectiveMood} modelUrl={activeModelUrl} animationUrls={data.animationUrls} />
 			{:else}
 				<StreamlingOverlay mood={effectiveMood} />
 			{/if}

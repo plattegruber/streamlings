@@ -56,5 +56,9 @@ export const streamling = sqliteTable('streamling', {
 	modelUrl: text('model_url'),
 	modelPrompt: text('model_prompt'),
 	modelStatus: text('model_status'),
-	meshyTaskId: text('meshy_task_id')
+	meshyTaskId: text('meshy_task_id'),
+	modelRetries: integer('model_retries').notNull().default(0),
+	// Rigging & animation fields
+	animationUrls: text('animation_urls'),
+	meshyRigTaskId: text('meshy_rig_task_id')
 });

@@ -25,6 +25,8 @@ export const load = async ({ locals, platform }) => {
 	let modelPrompt = null;
 	/** @type {string} */
 	let characterType = 'default-3d';
+	/** @type {Record<string, string> | null} */
+	let animationUrls = null;
 
 	if (userId && db) {
 		try {
@@ -45,8 +47,17 @@ export const load = async ({ locals, platform }) => {
 			if (userStreamling) {
 				streamerId = userStreamling.durableObjectId;
 				characterType = userStreamling.characterType;
+				const base = `/api/streamling/model?streamerId=${encodeURIComponent(userStreamling.durableObjectId)}`;
 				if (userStreamling.modelUrl) {
-					modelUrl = `/api/streamling/model?streamerId=${encodeURIComponent(userStreamling.durableObjectId)}`;
+					modelUrl = base;
+				}
+				if (userStreamling.animationUrls) {
+					/** @type {Record<string, string>} */
+					const parsed = JSON.parse(userStreamling.animationUrls);
+					animationUrls = {};
+					for (const [key, url] of Object.entries(parsed)) {
+						if (url) animationUrls[key] = `${base}&type=${key}`;
+					}
 				}
 				modelStatus = userStreamling.modelStatus;
 				modelPrompt = userStreamling.modelPrompt;
@@ -71,6 +82,7 @@ export const load = async ({ locals, platform }) => {
 		characterType,
 		modelUrl,
 		modelStatus,
-		modelPrompt
+		modelPrompt,
+		animationUrls
 	};
 };

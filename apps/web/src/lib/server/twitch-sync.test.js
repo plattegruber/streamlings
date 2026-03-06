@@ -48,7 +48,10 @@ beforeEach(() => {
 			model_url TEXT,
 			model_prompt TEXT,
 			model_status TEXT,
-			meshy_task_id TEXT
+			meshy_task_id TEXT,
+			model_retries INTEGER NOT NULL DEFAULT 0,
+			animation_urls TEXT,
+			meshy_rig_task_id TEXT
 		);
 	`);
 });

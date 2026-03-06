@@ -2,14 +2,47 @@
  * GET /api/streamling/generate/status
  *
  * Polls Meshy task status and advances the generation pipeline:
- *   pending → preview (Meshy preview SUCCEEDED) → refining → ready (GLB stored)
+ *   pending → preview → refining → rigging → animating → ready
  */
 
 import { json, error } from '@sveltejs/kit';
 import { eq } from 'drizzle-orm';
 import { env as privateEnv } from '$env/dynamic/private';
 import { streamling } from '$lib/server/db/schema.js';
-import { getTask, createRefineTask, downloadGlb } from '$lib/server/meshy.js';
+import {
+	getTask,
+	createRefineTask,
+	createPreviewTask,
+	buildPrompt,
+	downloadGlb,
+	createRiggingTask,
+	getRiggingTask,
+	createAnimationTask,
+	getAnimationTask,
+	ANIMATION_IDS
+} from '$lib/server/meshy.js';
+
+/**
+ * Upload a GLB to R2 if available, otherwise return the source URL as-is.
+ * @param {any} platform
+ * @param {string} recordId
+ * @param {string} sourceUrl
+ * @param {string} suffix
+ * @returns {Promise<string>}
+ */
+async function storeGlb(platform, recordId, sourceUrl, suffix) {
+	const bucket = platform?.env?.MODELS_BUCKET;
+	const r2PublicUrl = platform?.env?.R2_PUBLIC_URL;
+	if (bucket && r2PublicUrl) {
+		const data = await downloadGlb(sourceUrl);
+		const key = `models/${recordId}/${Date.now()}-${suffix}.glb`;
+		await bucket.put(key, data, {
+			httpMetadata: { contentType: 'model/gltf-binary' }
+		});
+		return `${r2PublicUrl}/${key}`;
+	}
+	return sourceUrl;
+}
 
 /** @type {import('./$types').RequestHandler} */
 export async function GET({ locals, platform }) {
@@ -54,22 +87,22 @@ export async function GET({ locals, platform }) {
 		throw error(503, 'Meshy API key not configured');
 	}
 
+	// --- Route to the correct Meshy API based on current stage ---
+
+	if (record.modelStatus === 'rigging') {
+		return handleRigging(db, apiKey, record, platform);
+	}
+
+	if (record.modelStatus === 'animating') {
+		return handleAnimating(db, apiKey, record, platform);
+	}
+
+	// For pending/preview/refining, poll the text-to-3d task
 	const task = await getTask(apiKey, record.meshyTaskId);
 
-	// Task failed
+	// Task failed — auto-retry up to 2 times before reporting failure
 	if (task.status === 'FAILED' || task.status === 'EXPIRED') {
-		await db
-			.update(streamling)
-			.set({ modelStatus: 'failed', meshyTaskId: null })
-			.where(eq(streamling.id, record.id))
-			.run();
-
-		return json({
-			status: 'failed',
-			progress: 0,
-			prompt: record.modelPrompt,
-			modelUrl: null
-		});
+		return handleFailure(db, apiKey, record);
 	}
 
 	// Preview completed → kick off refine
@@ -93,51 +126,25 @@ export async function GET({ locals, platform }) {
 		});
 	}
 
-	// Refine completed → download GLB and store
+	// Refine completed → kick off rigging
 	if (record.modelStatus === 'refining' && task.status === 'SUCCEEDED') {
-		const glbUrl = task.model_urls?.glb;
-		if (!glbUrl) {
-			await db
-				.update(streamling)
-				.set({ modelStatus: 'failed', meshyTaskId: null })
-				.where(eq(streamling.id, record.id))
-				.run();
-
-			return json({
-				status: 'failed',
-				progress: 0,
-				prompt: record.modelPrompt,
-				modelUrl: null
-			});
-		}
-
-		let finalUrl = glbUrl;
-
-		// Upload to R2 if both the bucket binding and public URL are configured (production).
-		// In local dev, miniflare provides the bucket binding but the public URL won't exist,
-		// so we fall back to the Meshy CDN URL (expires in ~3 days, fine for dev).
-		const bucket = platform?.env?.MODELS_BUCKET;
-		const r2PublicUrl = platform?.env?.R2_PUBLIC_URL;
-		if (bucket && r2PublicUrl) {
-			const glbData = await downloadGlb(glbUrl);
-			const key = `models/${record.id}/${Date.now()}.glb`;
-			await bucket.put(key, glbData, {
-				httpMetadata: { contentType: 'model/gltf-binary' }
-			});
-			finalUrl = `${r2PublicUrl}/${key}`;
-		}
+		const { taskId: rigTaskId } = await createRiggingTask(apiKey, record.meshyTaskId);
 
 		await db
 			.update(streamling)
-			.set({ modelStatus: 'ready', modelUrl: finalUrl, meshyTaskId: null })
+			.set({
+				modelStatus: 'rigging',
+				meshyTaskId: rigTaskId,
+				meshyRigTaskId: rigTaskId
+			})
 			.where(eq(streamling.id, record.id))
 			.run();
 
 		return json({
-			status: 'ready',
-			progress: 100,
+			status: 'rigging',
+			progress: 0,
 			prompt: record.modelPrompt,
-			modelUrl: finalUrl
+			modelUrl: null
 		});
 	}
 
@@ -145,6 +152,224 @@ export async function GET({ locals, platform }) {
 	return json({
 		status: record.modelStatus === 'refining' ? 'refining' : 'preview',
 		progress: task.progress ?? 0,
+		prompt: record.modelPrompt,
+		modelUrl: null
+	});
+}
+
+// ---------------------------------------------------------------------------
+// Stage handlers
+// ---------------------------------------------------------------------------
+
+/**
+ * Handle the rigging stage: poll rigging task, on success store assets and start idle animation.
+ * @param {any} db
+ * @param {string} apiKey
+ * @param {any} record
+ * @param {any} platform
+ */
+async function handleRigging(db, apiKey, record, platform) {
+	const task = await getRiggingTask(apiKey, record.meshyTaskId);
+
+	if (task.status === 'FAILED' || task.status === 'CANCELED') {
+		return handleFailure(db, apiKey, record);
+	}
+
+	if (task.status === 'SUCCEEDED' && task.result) {
+		const riggedUrl = await storeGlb(
+			platform,
+			record.id,
+			task.result.rigged_character_glb_url,
+			'rigged'
+		);
+
+		const walkingUrl = await storeGlb(
+			platform,
+			record.id,
+			task.result.basic_animations.walking_glb_url,
+			'walking'
+		);
+
+		const runningUrl = await storeGlb(
+			platform,
+			record.id,
+			task.result.basic_animations.running_glb_url,
+			'running'
+		);
+
+		// Start idle animation
+		const { taskId: animTaskId } = await createAnimationTask(
+			apiKey,
+			record.meshyRigTaskId ?? record.meshyTaskId,
+			ANIMATION_IDS.idle
+		);
+
+		/** @type {Record<string, string>} */
+		const animUrls = { walking: walkingUrl, running: runningUrl };
+
+		await db
+			.update(streamling)
+			.set({
+				modelStatus: 'animating',
+				modelUrl: riggedUrl,
+				meshyTaskId: animTaskId,
+				animationUrls: JSON.stringify(animUrls)
+			})
+			.where(eq(streamling.id, record.id))
+			.run();
+
+		return json({
+			status: 'animating',
+			progress: 0,
+			prompt: record.modelPrompt,
+			modelUrl: null
+		});
+	}
+
+	// Still rigging
+	return json({
+		status: 'rigging',
+		progress: task.progress ?? 0,
+		prompt: record.modelPrompt,
+		modelUrl: null
+	});
+}
+
+/**
+ * Handle the animating stage: poll animation task, advance through idle → dancing → ready.
+ * @param {any} db
+ * @param {string} apiKey
+ * @param {any} record
+ * @param {any} platform
+ */
+async function handleAnimating(db, apiKey, record, platform) {
+	const task = await getAnimationTask(apiKey, record.meshyTaskId);
+
+	if (task.status === 'FAILED' || task.status === 'CANCELED' || task.status === 'EXPIRED') {
+		return handleFailure(db, apiKey, record);
+	}
+
+	if (task.status === 'SUCCEEDED' && task.result) {
+		/** @type {Record<string, string>} */
+		const animUrls = record.animationUrls ? JSON.parse(record.animationUrls) : {};
+
+		if (!animUrls.idle) {
+			// Just completed the idle animation — store it and request dancing
+			const idleUrl = await storeGlb(
+				platform,
+				record.id,
+				task.result.animation_glb_url,
+				'idle'
+			);
+			animUrls.idle = idleUrl;
+
+			const { taskId: danceTaskId } = await createAnimationTask(
+				apiKey,
+				record.meshyRigTaskId,
+				ANIMATION_IDS.dancing
+			);
+
+			await db
+				.update(streamling)
+				.set({
+					meshyTaskId: danceTaskId,
+					animationUrls: JSON.stringify(animUrls)
+				})
+				.where(eq(streamling.id, record.id))
+				.run();
+
+			return json({
+				status: 'animating',
+				progress: 0,
+				prompt: record.modelPrompt,
+				modelUrl: null
+			});
+		}
+
+		// Just completed the dancing animation — all done!
+		const dancingUrl = await storeGlb(
+			platform,
+			record.id,
+			task.result.animation_glb_url,
+			'dancing'
+		);
+		animUrls.dancing = dancingUrl;
+
+		await db
+			.update(streamling)
+			.set({
+				modelStatus: 'ready',
+				meshyTaskId: null,
+				animationUrls: JSON.stringify(animUrls)
+			})
+			.where(eq(streamling.id, record.id))
+			.run();
+
+		return json({
+			status: 'ready',
+			progress: 100,
+			prompt: record.modelPrompt,
+			modelUrl: record.modelUrl
+		});
+	}
+
+	// Still animating
+	return json({
+		status: 'animating',
+		progress: task.progress ?? 0,
+		prompt: record.modelPrompt,
+		modelUrl: null
+	});
+}
+
+/**
+ * Handle task failure with auto-retry (up to 2 retries, restarts from preview).
+ * @param {any} db
+ * @param {string} apiKey
+ * @param {any} record
+ */
+async function handleFailure(db, apiKey, record) {
+	const retries = record.modelRetries ?? 0;
+
+	if (retries < 2 && record.modelPrompt) {
+		const styledPrompt = buildPrompt(record.modelPrompt);
+		const { taskId } = await createPreviewTask(apiKey, styledPrompt);
+
+		await db
+			.update(streamling)
+			.set({
+				modelStatus: 'pending',
+				meshyTaskId: taskId,
+				modelRetries: retries + 1,
+				meshyRigTaskId: null,
+				animationUrls: null
+			})
+			.where(eq(streamling.id, record.id))
+			.run();
+
+		return json({
+			status: 'retrying',
+			attempt: retries + 1,
+			progress: 0,
+			prompt: record.modelPrompt,
+			modelUrl: null
+		});
+	}
+
+	await db
+		.update(streamling)
+		.set({
+			modelStatus: 'failed',
+			meshyTaskId: null,
+			modelRetries: 0,
+			meshyRigTaskId: null
+		})
+		.where(eq(streamling.id, record.id))
+		.run();
+
+	return json({
+		status: 'failed',
+		progress: 0,
 		prompt: record.modelPrompt,
 		modelUrl: null
 	});

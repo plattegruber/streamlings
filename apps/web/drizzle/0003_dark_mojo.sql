@@ -1,0 +1,1 @@
+ALTER TABLE `streamling` ADD `model_retries` integer DEFAULT 0 NOT NULL;

@@ -39,7 +39,7 @@ export async function POST({ locals, request, platform }) {
 		throw error(404, 'No streamling found. Connect Twitch first.');
 	}
 
-	const activeStatuses = ['pending', 'preview', 'refining'];
+	const activeStatuses = ['pending', 'preview', 'refining', 'rigging', 'animating'];
 	if (record.modelStatus && activeStatuses.includes(record.modelStatus)) {
 		throw error(409, 'Generation already in progress');
 	}
@@ -53,7 +53,8 @@ export async function POST({ locals, request, platform }) {
 			modelStatus: 'pending',
 			meshyTaskId: taskId,
 			modelPrompt: prompt,
-			modelUrl: null
+			modelUrl: null,
+			modelRetries: 0
 		})
 		.where(eq(streamling.id, record.id))
 		.run();

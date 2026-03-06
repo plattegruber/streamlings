@@ -14,9 +14,9 @@
 	} from '$lib/rendering/particles.js';
 
 	/**
-	 * @type {{ mood?: string | null, modelUrl: string }}
+	 * @type {{ mood?: string | null, modelUrl: string, animationUrls?: Record<string, string> | null }}
 	 */
-	let { mood = 'idle', modelUrl } = $props();
+	let { mood = 'idle', modelUrl, animationUrls = null } = $props();
 
 	const safeMood = $derived(mood ?? 'idle');
 
@@ -62,7 +62,36 @@
 		/** @type {THREE.Object3D | null} */
 		let model = null;
 
+		// --- Skeletal animation state ---
+		/** @type {THREE.AnimationMixer | null} */
+		let mixer = null;
+		/** @type {Record<string, THREE.AnimationAction>} */
+		const actions = {};
+		/** @type {THREE.AnimationAction | null} */
+		let activeAction = null;
+		let useSkeletal = false;
+
+		/** Mood name → animation clip key */
+		const MOOD_ANIM_MAP = /** @type {Record<string, string>} */ ({
+			sleeping: 'idle',
+			idle: 'idle',
+			engaged: 'walking',
+			partying: 'dancing'
+		});
+
+		/** Mood name → animation timeScale */
+		const MOOD_SPEED_MAP = /** @type {Record<string, number>} */ ({
+			sleeping: 0.3,
+			idle: 1.0,
+			engaged: 1.0,
+			partying: 1.0
+		});
+
 		const loader = new GLTFLoader();
+
+		/**
+		 * Load the main model, then load animation GLBs if available.
+		 */
 		loader.load(
 			modelUrl,
 			(gltf) => {
@@ -79,12 +108,89 @@
 				model.position.set(-center.x * scale, -box.min.y * scale, -center.z * scale);
 
 				scene.add(model);
+
+				// If the model itself has animations (e.g. rigged GLB), set up mixer
+				if (animationUrls && Object.keys(animationUrls).length > 0) {
+					mixer = new THREE.AnimationMixer(model);
+					loadAnimationClips();
+				}
 			},
 			undefined,
 			(err) => {
 				console.error('[StreamlingOverlay3D] Failed to load model:', err);
 			}
 		);
+
+		/**
+		 * Load each animation GLB from animationUrls, extract clips, create actions.
+		 */
+		function loadAnimationClips() {
+			if (!animationUrls || !mixer || !model) return;
+
+			let loaded = 0;
+			const entries = Object.entries(animationUrls);
+
+			for (const [name, url] of entries) {
+				loader.load(
+					url,
+					(gltf) => {
+						if (!mixer) return;
+						const clip = gltf.animations[0];
+						if (clip) {
+							const action = mixer.clipAction(clip);
+							action.setLoop(THREE.LoopRepeat, Infinity);
+							actions[name] = action;
+						}
+						loaded++;
+						if (loaded === entries.length) {
+							useSkeletal = Object.keys(actions).length > 0;
+							if (useSkeletal) {
+								switchAnimation(safeMood);
+							}
+						}
+					},
+					undefined,
+					(err) => {
+						console.warn(`[StreamlingOverlay3D] Failed to load ${name} animation:`, err);
+						loaded++;
+						if (loaded === entries.length) {
+							useSkeletal = Object.keys(actions).length > 0;
+							if (useSkeletal) {
+								switchAnimation(safeMood);
+							}
+						}
+					}
+				);
+			}
+		}
+
+		/**
+		 * Crossfade to the animation clip for the given mood.
+		 * @param {string} moodName
+		 */
+		function switchAnimation(moodName) {
+			const clipKey = MOOD_ANIM_MAP[moodName] ?? 'idle';
+			const newAction = actions[clipKey];
+			if (!newAction || newAction === activeAction) {
+				// Just update speed if same action
+				if (activeAction) {
+					activeAction.timeScale = MOOD_SPEED_MAP[moodName] ?? 1.0;
+				}
+				return;
+			}
+
+			newAction.timeScale = MOOD_SPEED_MAP[moodName] ?? 1.0;
+
+			if (activeAction) {
+				newAction.reset();
+				newAction.play();
+				activeAction.crossFadeTo(newAction, 0.5, true);
+			} else {
+				newAction.play();
+			}
+
+			activeAction = newAction;
+		}
 
 		// --- Animation state ---
 		let time = 0;
@@ -93,6 +199,7 @@
 		let idleTimer = 5;
 		let lastTime = 0;
 		let animFrame = 0;
+		let lastMoodName = safeMood;
 
 		// --- Particles ---
 		/** @type {import('$lib/rendering/particles.js').ZParticle[]} */
@@ -123,17 +230,26 @@
 
 			const state = getAnimationState(currentMood, time, idleVariant);
 
+			// Switch skeletal animation on mood change
+			if (useSkeletal && safeMood !== lastMoodName) {
+				lastMoodName = safeMood;
+				switchAnimation(safeMood);
+			}
+
 			// Animate model
 			if (model) {
-				// Bounce
-				model.position.y = -0 + state.bounceY * 0.02;
-				// Sway/rotation
-				model.rotation.z = Math.sin(time * 1.5) * 0.03 + state.rotation;
-				// Party wiggle
-				if (currentMood > 2.5) {
-					model.rotation.y = Math.sin(time * 4) * 0.15;
+				if (useSkeletal && mixer) {
+					// Skeletal animation — let the mixer drive the skeleton
+					mixer.update(dt);
 				} else {
-					model.rotation.y *= 0.95; // decay back
+					// Procedural fallback (no animations available)
+					model.position.y = -0 + state.bounceY * 0.02;
+					model.rotation.z = Math.sin(time * 1.5) * 0.03 + state.rotation;
+					if (currentMood > 2.5) {
+						model.rotation.y = Math.sin(time * 4) * 0.15;
+					} else {
+						model.rotation.y *= 0.95;
+					}
 				}
 			}
 
@@ -148,12 +264,9 @@
 
 			// Draw face on 2D overlay
 			if (model) {
-				// Compute face position from the model's current bounding box each frame
-				// (accounts for bounce/sway). The face sits at ~70% of the bbox height,
-				// which lands on the forehead-to-eye area for chibi proportions.
 				const box = new THREE.Box3().setFromObject(model);
 				const faceY = box.min.y + (box.max.y - box.min.y) * 0.7;
-				const faceZ = box.max.z + 0.1; // just in front of the model
+				const faceZ = box.max.z + 0.1;
 
 				const faceWorldPos = new THREE.Vector3(0, faceY, faceZ);
 				faceWorldPos.project(camera);
@@ -183,6 +296,7 @@
 
 		return () => {
 			cancelAnimationFrame(animFrame);
+			if (mixer) mixer.stopAllAction();
 			renderer.dispose();
 		};
 	});

@@ -32,7 +32,23 @@ export async function GET({ locals, url }) {
 		throw error(404, 'No model found');
 	}
 
-	const res = await fetch(record.modelUrl);
+	// Serve an animation GLB when ?type=idle|walking|running|dancing
+	const type = url.searchParams.get('type');
+	let targetUrl = record.modelUrl;
+
+	if (type) {
+		if (!record.animationUrls) {
+			throw error(404, 'No animations found');
+		}
+		/** @type {Record<string, string>} */
+		const animUrls = JSON.parse(record.animationUrls);
+		if (!animUrls[type]) {
+			throw error(404, `No ${type} animation found`);
+		}
+		targetUrl = animUrls[type];
+	}
+
+	const res = await fetch(targetUrl);
 	if (!res.ok) {
 		throw error(502, 'Failed to fetch model');
 	}

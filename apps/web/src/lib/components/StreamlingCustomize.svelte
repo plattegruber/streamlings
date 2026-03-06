@@ -12,7 +12,7 @@
 	let progress = $state(0);
 	let stageLabel = $state('');
 
-	const isActive = $derived(status === 'pending' || status === 'preview' || status === 'refining');
+	const isActive = $derived(status === 'pending' || status === 'preview' || status === 'refining' || status === 'rigging' || status === 'animating' || status === 'retrying');
 
 	$effect(() => {
 		if (!isActive) return;
@@ -36,6 +36,15 @@
 				break;
 			case 'refining':
 				stageLabel = 'Refining model...';
+				break;
+			case 'rigging':
+				stageLabel = 'Rigging model...';
+				break;
+			case 'animating':
+				stageLabel = 'Adding animations...';
+				break;
+			case 'retrying':
+				stageLabel = 'Retrying generation...';
 				break;
 			default:
 				stageLabel = '';
@@ -107,7 +116,7 @@
 					style="width: {progress}%"
 				></div>
 			</div>
-			<p class="text-xs text-gray-500">This usually takes 1-3 minutes</p>
+			<p class="text-xs text-gray-500">This usually takes 3-5 minutes</p>
 		</div>
 	{:else if errorMessage}
 		<!-- Error state -->
