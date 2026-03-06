@@ -20,11 +20,16 @@
 				? '/models/default.glb'
 				: null
 	);
+	const activeAnimationUrls = $derived(
+		data.characterType === 'custom' ? data.animationUrls : null
+	);
 </script>
 
 <div class="overlay-root">
 	{#if activeModelUrl}
-		<StreamlingOverlay3D {mood} modelUrl={activeModelUrl} animationUrls={data.animationUrls} />
+		{#key activeModelUrl}
+			<StreamlingOverlay3D {mood} modelUrl={activeModelUrl} animationUrls={activeAnimationUrls} />
+		{/key}
 	{:else}
 		<StreamlingOverlay {mood} />
 	{/if}

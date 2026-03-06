@@ -43,6 +43,9 @@
 				? '/models/default.glb'
 				: null
 	);
+	const activeAnimationUrls = $derived(
+		data.characterType === 'custom' ? data.animationUrls : null
+	);
 </script>
 
 <div class="min-h-screen bg-gray-50">
@@ -90,11 +93,13 @@
 
 		<div class="mb-6 flex justify-center rounded-lg bg-white p-8 shadow">
 			{#if activeModelUrl}
-				<StreamlingOverlay3D
-					mood={effectiveMood}
-					modelUrl={activeModelUrl}
-					animationUrls={data.animationUrls}
-				/>
+				{#key activeModelUrl}
+					<StreamlingOverlay3D
+						mood={effectiveMood}
+						modelUrl={activeModelUrl}
+						animationUrls={activeAnimationUrls}
+					/>
+				{/key}
 			{:else}
 				<StreamlingOverlay mood={effectiveMood} />
 			{/if}
