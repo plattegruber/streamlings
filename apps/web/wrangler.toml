@@ -25,9 +25,10 @@ database_id = "f8693fb2-e25e-4185-9a93-afc0bde22d05"
 # Note: For local development, use .env file with DATABASE_URL=file:local.db
 # For production, D1 database will be automatically bound
 
-[[r2_buckets]]
-binding = "MODELS_BUCKET"
-bucket_name = "streamlings-models"
+# R2 bucket for model storage (optional — enable when R2 is activated on the account)
+# [[r2_buckets]]
+# binding = "MODELS_BUCKET"
+# bucket_name = "streamlings-models"
 
 [observability]
 enabled = true

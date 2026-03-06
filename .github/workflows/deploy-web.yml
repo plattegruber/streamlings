@@ -113,21 +113,6 @@ jobs:
               2>&1 || echo "⚠ Production migration may already be applied: ${base}"
           done
 
-      - name: Ensure R2 bucket exists
-        if: steps.cf-creds.outputs.present == 'true'
-        continue-on-error: true
-        working-directory: apps/web
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          if pnpm exec wrangler r2 bucket list 2>/dev/null | grep -q 'streamlings-models'; then
-            echo "R2 bucket streamlings-models already exists."
-          else
-            echo "Creating R2 bucket streamlings-models..."
-            pnpm exec wrangler r2 bucket create streamlings-models
-          fi
-
       - name: Deploy to Cloudflare Pages (preview)
         if: steps.cf-creds.outputs.present == 'true'
         id: deploy-preview
