@@ -109,9 +109,10 @@
 
 				scene.add(model);
 
-				// Center camera on the model's vertical midpoint
-				const scaledBox = new THREE.Box3().setFromObject(model);
-				const midY = (scaledBox.min.y + scaledBox.max.y) / 2;
+				// Center camera on the model's vertical midpoint (computed mathematically
+				// since setFromObject can give wrong results for skinned/rigged meshes)
+				const height = size.y * scale;
+				const midY = height / 2;
 				camera.position.set(0, midY, 5);
 				camera.lookAt(0, midY, 0);
 
