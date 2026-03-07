@@ -156,7 +156,10 @@
 						if (clip) {
 							// Debug: log track names for first clip only
 							if (loaded === 0) {
-								console.log(`[StreamlingOverlay3D] ${name} clip tracks:`, clip.tracks.map((/** @type {any} */ t) => t.name));
+								console.log(
+									`[StreamlingOverlay3D] ${name} clip tracks:`,
+									clip.tracks.map((/** @type {any} */ t) => t.name)
+								);
 								/** @type {string[]} */
 								const animBones = [];
 								gltf.scene.traverse((/** @type {any} */ obj) => {
