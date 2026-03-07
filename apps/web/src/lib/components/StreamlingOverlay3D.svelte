@@ -120,6 +120,14 @@
 
 				// If the model itself has animations (e.g. rigged GLB), set up mixer
 				if (animationUrls && Object.keys(animationUrls).length > 0) {
+					// Debug: log model bone names
+					/** @type {string[]} */
+					const boneNames = [];
+					model.traverse((/** @type {any} */ obj) => {
+						if (obj.isBone) boneNames.push(obj.name);
+					});
+					console.log('[StreamlingOverlay3D] Model bones:', boneNames);
+
 					mixer = new THREE.AnimationMixer(model);
 					loadAnimationClips();
 				}
@@ -146,6 +154,19 @@
 						if (!mixer) return;
 						const clip = gltf.animations[0];
 						if (clip) {
+							// Debug: log track names for first clip only
+							if (loaded === 0) {
+								console.log(
+									`[StreamlingOverlay3D] ${name} clip tracks:`,
+									clip.tracks.map((/** @type {any} */ t) => t.name)
+								);
+								/** @type {string[]} */
+								const animBones = [];
+								gltf.scene.traverse((/** @type {any} */ obj) => {
+									if (obj.isBone) animBones.push(obj.name);
+								});
+								console.log(`[StreamlingOverlay3D] ${name} GLB bones:`, animBones);
+							}
 							const action = mixer.clipAction(clip);
 							action.setLoop(THREE.LoopRepeat, Infinity);
 							actions[name] = action;
