@@ -94,83 +94,72 @@
 		const loader = new GLTFLoader();
 
 		/**
-		 * Load the main model, then load animation GLBs if available.
+		 * Center and scale a loaded model, add to scene, and configure camera.
+		 * @param {THREE.Object3D} obj
 		 */
-		loader.load(
-			modelUrl,
-			(gltf) => {
-				model = gltf.scene;
+		function setupModel(obj) {
+			model = obj;
+			const box = new THREE.Box3().setFromObject(model);
+			const center = box.getCenter(new THREE.Vector3());
+			const size = box.getSize(new THREE.Vector3());
+			const maxDim = Math.max(size.x, size.y, size.z);
+			const scale = 2 / maxDim;
 
-				// Auto-center and normalize to ~2 units tall
-				const box = new THREE.Box3().setFromObject(model);
-				const center = box.getCenter(new THREE.Vector3());
-				const size = box.getSize(new THREE.Vector3());
-				const maxDim = Math.max(size.x, size.y, size.z);
-				const scale = 2 / maxDim;
+			model.scale.setScalar(scale);
+			modelBaseY = -center.y * scale;
+			model.position.set(-center.x * scale, modelBaseY, -center.z * scale);
 
-				model.scale.setScalar(scale);
-				modelBaseY = -center.y * scale;
-				model.position.set(-center.x * scale, modelBaseY, -center.z * scale);
+			scene.add(model);
+			camera.position.set(0, 0, 5.5);
+			camera.lookAt(0, 0, 0);
+		}
 
-				scene.add(model);
-
-				// Camera looks at origin — model is centered there
-				camera.position.set(0, 0, 5.5);
-				camera.lookAt(0, 0, 0);
-
-				// If the model itself has animations (e.g. rigged GLB), set up mixer
-				if (animationUrls && Object.keys(animationUrls).length > 0) {
-					// Debug: log model bone names
-					/** @type {string[]} */
-					const boneNames = [];
-					model.traverse((/** @type {any} */ obj) => {
-						if (obj.isBone) boneNames.push(obj.name);
-					});
-					console.log('[StreamlingOverlay3D] Model bones:', boneNames);
-
-					mixer = new THREE.AnimationMixer(model);
-					loadAnimationClips();
-				}
-			},
-			undefined,
-			(err) => {
-				console.error('[StreamlingOverlay3D] Failed to load model:', err);
-			}
-		);
+		if (animationUrls && Object.keys(animationUrls).length > 0) {
+			// Animation GLBs contain the full rigged mesh + skeleton + clip.
+			// Use the first one as the base model (the rigged GLB may lack bones).
+			loadAnimatedModel();
+		} else {
+			// No animations — load the raw model for procedural animation
+			loader.load(
+				modelUrl,
+				(gltf) => setupModel(gltf.scene),
+				undefined,
+				(err) => console.error('[StreamlingOverlay3D] Failed to load model:', err)
+			);
+		}
 
 		/**
-		 * Load each animation GLB from animationUrls, extract clips, create actions.
+		 * Load animation GLBs. Use the first loaded GLB as the base model
+		 * (it contains the rigged mesh with skeleton). Remaining GLBs provide
+		 * additional animation clips applied to the same skeleton.
 		 */
-		function loadAnimationClips() {
-			if (!animationUrls || !mixer || !model) return;
+		function loadAnimatedModel() {
+			if (!animationUrls) return;
 
 			let loaded = 0;
+			let baseModelSet = false;
 			const entries = Object.entries(animationUrls);
 
 			for (const [name, url] of entries) {
 				loader.load(
 					url,
 					(gltf) => {
-						if (!mixer) return;
-						const clip = gltf.animations[0];
-						if (clip) {
-							// Debug: log track names for first clip only
-							if (loaded === 0) {
-								console.log(
-									`[StreamlingOverlay3D] ${name} clip tracks:`,
-									clip.tracks.map((/** @type {any} */ t) => t.name)
-								);
-								/** @type {string[]} */
-								const animBones = [];
-								gltf.scene.traverse((/** @type {any} */ obj) => {
-									if (obj.isBone) animBones.push(obj.name);
-								});
-								console.log(`[StreamlingOverlay3D] ${name} GLB bones:`, animBones);
-							}
-							const action = mixer.clipAction(clip);
-							action.setLoop(THREE.LoopRepeat, Infinity);
-							actions[name] = action;
+						// Use the first successfully loaded animation GLB as the model
+						if (!baseModelSet) {
+							baseModelSet = true;
+							setupModel(gltf.scene);
+							mixer = new THREE.AnimationMixer(/** @type {THREE.Object3D} */ (model));
 						}
+
+						if (mixer) {
+							const clip = gltf.animations[0];
+							if (clip) {
+								const action = mixer.clipAction(clip);
+								action.setLoop(THREE.LoopRepeat, Infinity);
+								actions[name] = action;
+							}
+						}
+
 						loaded++;
 						if (loaded === entries.length) {
 							useSkeletal = Object.keys(actions).length > 0;
